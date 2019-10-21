@@ -8,7 +8,12 @@
 #define QDP_PARSCALAR_SPECIFIC_H
 
 #include "qmp.h"
+
+#ifdef HAVE_OMP_H
 #include <omp.h>
+#else
+static int omp_get_thread_num( void ) { return 0 ; }
+#endif
 
 //! include the header file for dispatch
 #include "qdp_dispatch.h"

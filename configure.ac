@@ -13,6 +13,8 @@ AM_INIT_AUTOMAKE([subdir-objects])
 dnl defines...
 AC_CONFIG_HEADERS([include/qdp_config_internal.h])
 
+AC_CHECK_HEADERS([omp.h],,AC_MSG_NOTICE([omp.h not found]))
+
 dnl
 dnl
 dnl --with-xxxx and --enable-xxxx switches 

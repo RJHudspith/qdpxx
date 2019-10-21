@@ -19,33 +19,27 @@ namespace QDP {
 
 void vaxpy4(REAL64 *Out,REAL64 *scalep,REAL64 *InScale, int n_4spin)
 {
-  __m128d scalar;
-  __m128d tmp1;
+  // Load the scalar into low bytes of scalar
+  __m128d scalar = _mm_load_sd(scalep);
+  
+  // cross components into tmp 
+  __m128d tmp1 = _mm_shuffle_pd(scalar, scalar, 0x1);
+  scalar = _mm_add_pd(scalar, tmp1);
+
+  double *in_p=InScale;
+  double *out_p=Out;
+
   __m128d tmp2;
   __m128d tmp3;
-   __m128d in1;
+  __m128d in1;
   __m128d add1;
   __m128d in2;
   __m128d add2;
   __m128d in3;
   __m128d add3;
-  __m128d in4;
-  __m128d add4;
   __m128d out1;
   __m128d out2;
   __m128d out3;
-
-  // Load the scalar into low bytes of scalar
-  scalar = _mm_load_sd(scalep);
-  
-  // cross components into tmp 
-  // Zero tmp
-  tmp1 = _mm_setzero_pd();
-  tmp1 = _mm_shuffle_pd(scalar, scalar, 0x1);
-  scalar = _mm_add_pd(scalar, tmp1);
-
-  double *in_p=InScale;
-  double *out_p=Out;
 
   if( n_4spin < L2BY2 ) { 
     
@@ -128,30 +122,11 @@ void vaxpy4(REAL64 *Out,REAL64 *scalep,REAL64 *InScale, int n_4spin)
 
 void vaxpyz4(REAL64 *Out,REAL64 *scalep,REAL64 *InScale, REAL64 *Add,int n_4vec)
 {
- __m128d scalar;
-  __m128d tmp1;
-  __m128d tmp2;
-  __m128d tmp3;
-   __m128d in1;
-  __m128d add1;
-  __m128d in2;
-  __m128d add2;
-  __m128d in3;
-  __m128d add3;
-  __m128d in4;
-  __m128d add4;
-  __m128d out1;
-  __m128d out2;
-  __m128d out3; 
-
   // Load the scalar into low bytes of scalar
-  scalar = _mm_load_sd(scalep);
+  __m128d scalar = _mm_load_sd(scalep);
   
   // cross components into tmp 
-  // Zero tmp
-  tmp1 = _mm_setzero_pd();
-
-  tmp1 = _mm_shuffle_pd(scalar, scalar, 0x1);
+  __m128d tmp1 = _mm_shuffle_pd(scalar, scalar, 0x1);
   scalar = _mm_add_pd(scalar, tmp1);
 
   // Do n_3vec 3vectors.
@@ -159,6 +134,17 @@ void vaxpyz4(REAL64 *Out,REAL64 *scalep,REAL64 *InScale, REAL64 *Add,int n_4vec)
   double *add_p=Add;
   double *out_p=Out;
 
+  __m128d tmp2;
+  __m128d tmp3;
+  __m128d in1;
+  __m128d add1;
+  __m128d in2;
+  __m128d add2;
+  __m128d in3;
+  __m128d add3;
+  __m128d out1;
+  __m128d out2;
+  __m128d out3; 
 
   if( n_4vec < L2BY2 ) { 
     

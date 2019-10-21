@@ -105,14 +105,6 @@ void evaluate(OLattice< DCol >& d,
     const int *tab = s.siteTable().slice();
     unordered_ssed_3mat_args a(l,r,d,tab,ssed_m_eq_mm);
     dispatch_to_threads(s.numSiteTable(), a, unordered_ssed_3mat_evaluate_func);
-
-    //for(int j=0; j < s.numSiteTable(); ++j) {
-    // int i = tab[j];
-    // REAL64 *lm = (REAL64 *)&(l.elem(i).elem().elem(0,0).real());
-    // REAL64 *rm = (REAL64 *)&(r.elem(i).elem().elem(0,0).real());
-    // REAL64 *dm = (REAL64 *)&(d.elem(i).elem().elem(0,0).real());
-    // ssed_m_eq_mm(dm,lm, rm, 1);
-    //    }
   }
 }
 
@@ -142,26 +134,13 @@ void evaluate(OLattice< DCol >& d,
     REAL64 *dm = (REAL64 *)&(d.elem(s.start()).elem().elem(0,0).real());
     ordered_ssed_3mat_args a = {lm,rm,dm,ssed_m_eq_hm};
     dispatch_to_threads(n_3mat, a, ordered_ssed_3mat_evaluate_func);
-    
-    //ssed_m_eq_hm(dm,lm,rm,n_3mat);
   }
   else { 
     const int *tab = s.siteTable().slice();
     unordered_ssed_3mat_args a(l,r,d,tab,ssed_m_eq_hm);
     dispatch_to_threads(s.numSiteTable(), a, unordered_ssed_3mat_evaluate_func);
-
-    //for(int j=0; j < s.numSiteTable(); ++j) {
-    //
-    //  int i = tab[j];
-    //  REAL64 *lm = (REAL64 *)&(l.elem(i).elem().elem(0,0).real());
-    //  REAL64 *rm = (REAL64 *)&(r.elem(i).elem().elem(0,0).real());
-    //  REAL64 *dm = (REAL64 *)&(d.elem(i).elem().elem(0,0).real());
-    //  ssed_m_eq_hm(dm, lm, rm, 1);
-    //    }
   }
-
 }
-
 
 // Specialization to optimize the case   
 //    LatticeColorMatrix[Subset] = LatticeColorMatrix * adj(LatticeColorMatrix)
@@ -188,23 +167,11 @@ void evaluate(OLattice< DCol >& d,
       int n_3mat = s.end()-s.start()+1;
       ordered_ssed_3mat_args a = {lm,rm,dm,ssed_m_eq_mh};
       dispatch_to_threads(n_3mat, a, ordered_ssed_3mat_evaluate_func);
-
-      //ssed_m_eq_mh(dm,lm,rm,n_3mat);
   }
   else { 
-
     const int *tab = s.siteTable().slice();
     unordered_ssed_3mat_args a(l,r,d,tab,ssed_m_eq_mh);
     dispatch_to_threads(s.numSiteTable(), a, unordered_ssed_3mat_evaluate_func);
-
-    // for(int j=0; j < s.numSiteTable(); ++j) {
-    //  int i = tab[j];
-    //  REAL64 *lm = (REAL64 *)&(l.elem(i).elem().elem(0,0).real());
-    //  REAL64 *rm = (REAL64 *)&(r.elem(i).elem().elem(0,0).real());
-    //  REAL64 *dm = (REAL64 *)&(d.elem(i).elem().elem(0,0).real());
-    //  ssed_m_eq_mh(dm, lm, rm, 1);
-    //
-    // }
   }
 }
 
@@ -234,22 +201,11 @@ void evaluate(OLattice< DCol >& d,
     REAL64 *dm = (REAL64 *)&(d.elem(s.start()).elem().elem(0,0).real());
     ordered_ssed_3mat_args a = {lm,rm,dm,ssed_m_eq_hh};
     dispatch_to_threads(n_3mat, a, ordered_ssed_3mat_evaluate_func);
-    
-    //ssed_m_eq_hh(dm,lm,rm,n_3mat);
   }
   else { 
     const int *tab = s.siteTable().slice();
     unordered_ssed_3mat_args a(l,r,d,tab,ssed_m_eq_hh);
     dispatch_to_threads(s.numSiteTable(), a, unordered_ssed_3mat_evaluate_func);
-
-    // for(int j=0; j < s.numSiteTable(); ++j) {
-    //  int i = tab[j];
-    //  REAL64 *lm = (REAL64 *)&(l.elem(i).elem().elem(0,0).real());
-    //  REAL64 *rm = (REAL64 *)&(r.elem(i).elem().elem(0,0).real());
-    //  REAL64 *dm = (REAL64 *)&(d.elem(i).elem().elem(0,0).real());
-    //
-    // ssed_m_eq_hh(dm,lm,rm,1);
-    //}
   }
 }
 
@@ -277,9 +233,7 @@ void evaluate(OLattice< DCol >& d,
     REAL64* lm = &(a->lm[index]);
     REAL64* rm = &(a->rm[index]);
     REAL64* dm = &(a->dm[index]);
-    REAL64* c  = a->c; // The const
-
-    func(dm,c,lm,rm, n_3mat);
+    func(dm,a->c,lm,rm, n_3mat);
   }
 
   struct unordered_ssed_3mat_const_args { 
@@ -344,14 +298,6 @@ void evaluate(OLattice< DCol >& d,
     const int *tab = s.siteTable().slice();
     unordered_ssed_3mat_const_args a(l,r,d,&one,tab,ssed_m_peq_amm);
     dispatch_to_threads(s.numSiteTable(), a, unordered_ssed_3mat_const_evaluate_func);  
-    // const int *tab = s.siteTable().slice();
-    // for(int j=0; j < s.numSiteTable(); ++j) {
-    //   int i = tab[j];
-    //  REAL64 *lm = (REAL64 *)&(l.elem(i).elem().elem(0,0).real());
-    //  REAL64 *rm = (REAL64 *)&(r.elem(i).elem().elem(0,0).real());
-    //  REAL64 *dm = (REAL64 *)&(d.elem(i).elem().elem(0,0).real());
-    //  ssed_m_peq_amm(dm,&one,lm,rm,1);
-    // }
   }
 }
 
@@ -367,8 +313,6 @@ void evaluate(OLattice< DCol >& d,
 	                    OLattice< DCol > >& rhs,
 	      const Subset& s)
 {
-//  cout << "call single site QDP_M_peq_aM_times_M" << endl;
-
   typedef OLattice< DCol >    C;
 
   const C& l = static_cast<const C&>(rhs.expression().left().child());
@@ -377,27 +321,17 @@ void evaluate(OLattice< DCol >& d,
  
   REAL64 one = (REAL64)1;
   if( s.hasOrderedRep() ) { 
-      REAL64 *lm = (REAL64 *)&(l.elem(s.start()).elem().elem(0,0).real());
-      REAL64 *rm = (REAL64 *)&(r.elem(s.start()).elem().elem(0,0).real());
-      REAL64 *dm = (REAL64 *)&(d.elem(s.start()).elem().elem(0,0).real());
-
-      int n_3mat=s.end()-s.start()+1;
-      ordered_ssed_3mat_const_args a = {lm,rm,dm,&one,ssed_m_peq_ahm};
-      dispatch_to_threads(n_3mat, a, ordered_ssed_3mat_const_evaluate_func);
-      // ssed_m_peq_ahm(dm,&one,lm,rm,n_3mat);
+    REAL64 *lm = (REAL64 *)&(l.elem(s.start()).elem().elem(0,0).real());
+    REAL64 *rm = (REAL64 *)&(r.elem(s.start()).elem().elem(0,0).real());
+    REAL64 *dm = (REAL64 *)&(d.elem(s.start()).elem().elem(0,0).real());
+    int n_3mat=s.end()-s.start()+1;
+    ordered_ssed_3mat_const_args a = {lm,rm,dm,&one,ssed_m_peq_ahm};
+    dispatch_to_threads(n_3mat, a, ordered_ssed_3mat_const_evaluate_func);
   }
   else { 
     const int *tab = s.siteTable().slice();
     unordered_ssed_3mat_const_args a(l,r,d,&one,tab,ssed_m_peq_ahm);
     dispatch_to_threads(s.numSiteTable(), a, unordered_ssed_3mat_const_evaluate_func);  
-    //const int *tab = s.siteTable().slice();
-    //for(int j=0; j < s.numSiteTable(); ++j) {
-    //  int i = tab[j];
-    //  REAL64 *lm = (REAL64 *)&(l.elem(i).elem().elem(0,0).real());
-    //  REAL64 *rm = (REAL64 *)&(r.elem(i).elem().elem(0,0).real());
-    //  REAL64 *dm = (REAL64 *)&(d.elem(i).elem().elem(0,0).real());
-    //  ssed_m_peq_ahm(dm,&one,lm,rm,1);
-    //}
   }
 }
 
@@ -413,8 +347,6 @@ void evaluate(OLattice< DCol >& d,
 	                    OLattice< DCol > >& rhs,
 	      const Subset& s)
 {
-//  cout << "call single site QDP_M_peq_M_times_aM" << endl;
-
   typedef OLattice< DCol >    C;
 
   const C& l = static_cast<const C&>(rhs.expression().left());
@@ -429,20 +361,11 @@ void evaluate(OLattice< DCol >& d,
     int n_3mat=s.end()-s.start()+1;
     ordered_ssed_3mat_const_args a = {lm,rm,dm,&one,ssed_m_peq_amh};
     dispatch_to_threads(n_3mat, a, ordered_ssed_3mat_const_evaluate_func);
-    // ssed_m_peq_amh(dm,&one,lm,rm,n_3mat);
   }
   else { 
     const int *tab = s.siteTable().slice();
     unordered_ssed_3mat_const_args a(l,r,d,&one,tab,ssed_m_peq_amh);
     dispatch_to_threads(s.numSiteTable(), a, unordered_ssed_3mat_const_evaluate_func);  
-    // const int *tab = s.siteTable().slice();
-    // for(int j=0; j < s.numSiteTable(); ++j) {
-    //  int i = tab[j];
-    //  REAL64 *lm = (REAL64 *)&(l.elem(i).elem().elem(0,0).real());
-    //  REAL64 *rm = (REAL64 *)&(r.elem(i).elem().elem(0,0).real());
-    //  REAL64 *dm = (REAL64 *)&(d.elem(i).elem().elem(0,0).real());
-    //  ssed_m_peq_amh(dm,&one,lm,rm,1);
-    // }
   }
 }
 
@@ -458,8 +381,6 @@ void evaluate(OLattice< DCol >& d,
 	                    OLattice< DCol > >& rhs,
 	      const Subset& s)
 {
-//  cout << "call single site QDP_M_peq_Ma_times_Ma" << endl;
-
   typedef OLattice< DCol >    C;
 
   const C& l = static_cast<const C&>(rhs.expression().left().child());
@@ -467,7 +388,6 @@ void evaluate(OLattice< DCol >& d,
   
   REAL64 one=(REAL64)1;
   
-
   if( s.hasOrderedRep() ) { 
       
     REAL64 *lm = (REAL64 *)&(l.elem(s.start()).elem().elem(0,0).real());
@@ -476,22 +396,11 @@ void evaluate(OLattice< DCol >& d,
     int n_3mat=s.end()-s.start()+1;
     ordered_ssed_3mat_const_args a = {lm,rm,dm,&one,ssed_m_peq_ahh};
     dispatch_to_threads(n_3mat, a, ordered_ssed_3mat_const_evaluate_func);
-
-    //ssed_m_peq_ahh(dm,&one,lm,rm,n_3mat);
-      
   }
   else { 
     const int *tab = s.siteTable().slice();
     unordered_ssed_3mat_const_args a(l,r,d,&one,tab,ssed_m_peq_ahh);
     dispatch_to_threads(s.numSiteTable(), a, unordered_ssed_3mat_const_evaluate_func);  
-    // const int *tab = s.siteTable().slice();
-    // for(int j=0; j < s.numSiteTable(); ++j) {
-    //  int i = tab[j];
-    //  REAL64 *lm = (REAL64 *)&(l.elem(i).elem().elem(0,0).real());
-    //  REAL64 *rm = (REAL64 *)&(r.elem(i).elem().elem(0,0).real());
-    //  REAL64 *dm = (REAL64 *)&(d.elem(i).elem().elem(0,0).real());
-    //  ssed_m_peq_ahh(dm,&one,lm,rm,1);
-    // }
   }
 }
 
@@ -499,6 +408,21 @@ void evaluate(OLattice< DCol >& d,
 // Specialization to optimize the case
 //   LatticeColorMatrix = LatticeColorMatrix
 //   Implement as m1 = a*m2  (a=1)
+
+  struct unordered_ssed_2mat_const_args {    
+    unordered_ssed_2mat_const_args( const OLattice<DCol>& src_,
+				    OLattice<DCol>& target_,
+				    REAL64 *c_,
+				    const int* tab_,
+				    void  (*func_)(REAL64*, REAL64*, REAL64*, int) ) :
+      src(src_), target(target_),c(c_),tab(tab_),func(func_) {}
+
+    const OLattice<DCol>& src;
+    OLattice<DCol>& target;
+    REAL64 *c ;
+    const int *tab ;
+    void  (*func)(REAL64*, REAL64*, REAL64*, int);
+  };
 
   struct ordered_ssed_2mat_const_args {
     REAL64* src;
@@ -517,35 +441,15 @@ void evaluate(OLattice< DCol >& d,
     int index = lo*18; // 3*3*2 doubles
     REAL64* src = &(a->src[index]);
     REAL64* target = &(a->target[index]);
-    REAL64* c  = a->c; // The const
-
-    func(target,c,src, n_3mat);
+ 
+    func(target,a->c,src, n_3mat);
   }
-
-  struct unordered_ssed_2mat_const_args { 
-    unordered_ssed_2mat_const_args(
-				   const OLattice<DCol>& src_,
-				   OLattice<DCol>& target_,
-				   REAL64*c_,
-				   const int* tab_,
-				   void  (*func_)(REAL64*, REAL64*, REAL64*, int) ) :
-      src(src_), target(target_),c(c_),tab(tab_),func(func_) {}
-
-    const OLattice<DCol>& src;
-    OLattice<DCol>& target;
-    REAL64*c;
-    const int* tab;
-    void  (*func)(REAL64*, REAL64*, REAL64*, int);
-  };
 
   inline 
   void unordered_ssed_2mat_const_evaluate_func(int lo, int hi, int myId, 
-					     unordered_ssed_2mat_const_args *a)
+					       unordered_ssed_2mat_const_args *a)
   {
-    void (*func)(REAL64*, REAL64*, REAL64*, int) = a->func;
-    REAL64* c  = a->c; // The const    
-
-    
+    void (*func)(REAL64*, REAL64*, REAL64*, int) = a->func;    
     // Loop through the sites
     for(int j=lo; j < hi; j++) { 
       int i = a->tab[j];
@@ -562,8 +466,8 @@ template<>
 void evaluate(OLattice< DCol >& d, 
 	      const OpAssign& op, 
 	      const QDPExpr<
-	         UnaryNode<OpIdentity, Reference< QDPType< DCol, OLattice< DCol > > > >,
-                 OLattice< DCol > >& rhs, 
+	      UnaryNode<OpIdentity, Reference< QDPType< DCol, OLattice< DCol > > > >,
+	      OLattice< DCol > >& rhs, 
 	      const Subset& s) 
 {
   typedef OLattice<DCol> C;
@@ -576,8 +480,6 @@ void evaluate(OLattice< DCol >& d,
     REAL64* l_ptr =(REAL64*)&(l.elem(s.start()).elem().elem(0,0).real());
     ordered_ssed_2mat_const_args a = {l_ptr, d_ptr, &one, ssed_m_eq_scal_m};
     dispatch_to_threads(n_3mat, a, ordered_ssed_2mat_const_evaluate_func);
-
-    // ssed_m_eq_scal_m(d_ptr,&one,l_ptr,n_3mat);
   }
   else {
     // Unordered case 
@@ -585,16 +487,6 @@ void evaluate(OLattice< DCol >& d,
     unordered_ssed_2mat_const_args a(l,d,&one,tab, ssed_m_eq_scal_m);
     dispatch_to_threads(s.numSiteTable(), a, 
 			unordered_ssed_2mat_const_evaluate_func);
-
-    
-    // Loop through the sites
-    // for(int j=0; j < s.numSiteTable(); j++) { 
-    //  int i = tab[j];
-    //  REAL64* d_ptr =&(d.elem(i).elem().elem(0,0).real());
-    //  REAL64* l_ptr =(REAL64*)&(l.elem(i).elem().elem(0,0).real());
-    //
-    //  ssed_m_eq_scal_m(d_ptr,&one,l_ptr,1);
-    // }
   }
 }
 
@@ -639,7 +531,6 @@ void evaluate(OLattice< DCol >& d,
 					 unordered_ssed_2mat_args *a)
   {
     void (*func)(REAL64*, REAL64*, int) = a->func;
-
     
     // Loop through the sites
     for(int j=lo; j < hi; j++) { 
@@ -648,8 +539,6 @@ void evaluate(OLattice< DCol >& d,
       REAL64* l_ptr =(REAL64*)&(a->src.elem(i).elem().elem(0,0).real());
       func(d_ptr,l_ptr,1);
     }
-
-
   }
 
 template<>
@@ -669,7 +558,6 @@ void evaluate(OLattice< DCol >& d,
     REAL64* l_ptr =(REAL64*)&(l.elem(s.start()).elem().elem(0,0).real());
     ordered_ssed_2mat_args a = {l_ptr, d_ptr, ssed_m_peq_m};
     dispatch_to_threads(n_3mat, a, ordered_ssed_2mat_evaluate_func);
-    //    ssed_m_peq_m(d_ptr,l_ptr,n_3mat);
   }
   else {
     // Unordered case 
@@ -677,15 +565,6 @@ void evaluate(OLattice< DCol >& d,
     unordered_ssed_2mat_args a(l,d, tab, ssed_m_peq_m);
     dispatch_to_threads(s.numSiteTable(), a, 
 			unordered_ssed_2mat_evaluate_func);
-    
-    // Loop through the sites
-    // for(int j=0; j < s.numSiteTable(); j++) { 
-    //  int i = tab[j];
-    //   REAL64* d_ptr =&(d.elem(i).elem().elem(0,0).real());
-    //  REAL64* l_ptr =(REAL64*)&(l.elem(i).elem().elem(0,0).real());
-    //  ssed_m_peq_m(d_ptr,l_ptr,1);
-    // }
-
   }
 }
 
@@ -708,8 +587,6 @@ void evaluate(OLattice< DCol >& d,
     REAL64* l_ptr =(REAL64*)&(l.elem(s.start()).elem().elem(0,0).real());
     ordered_ssed_2mat_args a = {l_ptr, d_ptr, ssed_m_meq_m};
     dispatch_to_threads(n_3mat, a, ordered_ssed_2mat_evaluate_func);
-
-    //   ssed_m_meq_m(d_ptr,l_ptr,n_3mat);
   }
   else {   
     // Unordered case 
@@ -717,14 +594,6 @@ void evaluate(OLattice< DCol >& d,
     unordered_ssed_2mat_args a(l,d, tab, ssed_m_meq_m);
     dispatch_to_threads(s.numSiteTable(), a, 
 			unordered_ssed_2mat_evaluate_func);
-    
-    // Loop through the sites
-    //  for(int j=0; j < s.numSiteTable(); j++) { 
-    //  int i = tab[j];
-    //  REAL64* d_ptr =&(d.elem(i).elem().elem(0,0).real());
-    //  REAL64* l_ptr =(REAL64*)&(l.elem(i).elem().elem(0,0).real());
-    //  ssed_m_meq_m(d_ptr,l_ptr,1);
-    // }
   }
 }
 
@@ -747,8 +616,7 @@ void evaluate(OLattice< DCol >& d,
   const C& r = static_cast<const C&>(rhs.expression().right());
 
   REAL64 mone=(REAL64)-1;
-
-
+  
   if( s.hasOrderedRep() ) { 
 
     REAL64 *lm = (REAL64 *)&(l.elem(s.start()).elem().elem(0,0).real());
@@ -757,23 +625,12 @@ void evaluate(OLattice< DCol >& d,
     int n_3mat=s.end()-s.start()+1;
     ordered_ssed_3mat_const_args a = {lm,rm,dm,&mone,ssed_m_peq_amm};
     dispatch_to_threads(n_3mat, a, ordered_ssed_3mat_const_evaluate_func);
-
-    //ssed_m_peq_amm(dm,&mone,lm, rm, n_3mat);
   }
   else { 
 
     const int *tab = s.siteTable().slice();
     unordered_ssed_3mat_const_args a(l,r,d,&mone,tab,ssed_m_peq_amm);
     dispatch_to_threads(s.numSiteTable(), a, unordered_ssed_3mat_const_evaluate_func);  
-
-    //    for(int j=0; j < s.numSiteTable(); j++) { 
-    //      int i=tab[j];
-    //      REAL64 *lm = (REAL64 *)&(l.elem(i).elem().elem(0,0).real());
-    //      REAL64 *rm = (REAL64 *)&(r.elem(i).elem().elem(0,0).real());
-    //       REAL64 *dm = (REAL64 *)&(d.elem(i).elem().elem(0,0).real());
-    //
-    //      ssed_m_peq_amm(dm,&mone,lm,rm,1);
-    //   }
   }
 }
 
@@ -805,22 +662,11 @@ void evaluate(OLattice< DCol >& d,
     int n_3mat=s.end()-s.start()+1;
     ordered_ssed_3mat_const_args a = {lm,rm,dm,&mone,ssed_m_peq_ahm};
     dispatch_to_threads(n_3mat, a, ordered_ssed_3mat_const_evaluate_func);
-
-    //ssed_m_peq_ahm(dm,&mone,lm,rm,n_3mat);
   }
   else { 
-
     const int *tab = s.siteTable().slice();
     unordered_ssed_3mat_const_args a(l,r,d,&mone,tab,ssed_m_peq_ahm);
     dispatch_to_threads(s.numSiteTable(), a, unordered_ssed_3mat_const_evaluate_func);  
-
-    //for(int j=0; j < s.numSiteTable(); j++) { 
-    //  int i=tab[j];
-    //  REAL64 *lm = (REAL64 *)&(l.elem(i).elem().elem(0,0).real());
-    //  REAL64 *rm = (REAL64 *)&(r.elem(i).elem().elem(0,0).real());
-    //  REAL64 *dm = (REAL64 *)&(d.elem(i).elem().elem(0,0).real());
-    //  ssed_m_peq_ahm(dm,&mone,lm, rm, 1);
-    // }
   }
 }
 
@@ -852,22 +698,11 @@ void evaluate(OLattice< DCol >& d,
     int n_3mat=s.end()-s.start()+1;
     ordered_ssed_3mat_const_args a = {lm,rm,dm,&mone,ssed_m_peq_amh};
     dispatch_to_threads(n_3mat, a, ordered_ssed_3mat_const_evaluate_func);
-
-    //   ssed_m_peq_amh(dm,&mone,lm, rm,n_3mat);
   }
   else { 
     const int *tab = s.siteTable().slice();
     unordered_ssed_3mat_const_args a(l,r,d,&mone,tab,ssed_m_peq_amh);
     dispatch_to_threads(s.numSiteTable(), a, unordered_ssed_3mat_const_evaluate_func);  
-
-    //  for(int j=0; j < s.numSiteTable(); j++) { 
-    //    int i=tab[j];
-    //    REAL64 *lm = (REAL64 *)&(l.elem(i).elem().elem(0,0).real());
-    //    REAL64 *rm = (REAL64 *)&(r.elem(i).elem().elem(0,0).real());
-    //    REAL64 *dm = (REAL64 *)&(d.elem(i).elem().elem(0,0).real());
-    //
-    //    ssed_m_peq_amh(dm,&mone,lm, rm,1);
-    //  }
   }
 }
 
@@ -883,8 +718,6 @@ void evaluate(OLattice< DCol >& d,
 	                    OLattice< DCol > >& rhs,
 	      const Subset& s)
 {
-//  cout << "call single site QDP_M_meq_Ma_times_Ma" << endl;
-
   typedef OLattice< DCol >    C;
 
   const C& l = static_cast<const C&>(rhs.expression().left().child());
@@ -892,33 +725,18 @@ void evaluate(OLattice< DCol >& d,
   REAL64 mone=(REAL64)-1;
 
   if( s.hasOrderedRep() ) { 
-
     REAL64 *lm = (REAL64 *)&(l.elem(s.start()).elem().elem(0,0).real());
     REAL64 *rm = (REAL64 *)&(r.elem(s.start()).elem().elem(0,0).real());
     REAL64 *dm = (REAL64 *)&(d.elem(s.start()).elem().elem(0,0).real());
     int n_3mat=s.end()-s.start()+1;
     ordered_ssed_3mat_const_args a = {lm,rm,dm,&mone,ssed_m_peq_ahh};
     dispatch_to_threads(n_3mat, a, ordered_ssed_3mat_const_evaluate_func);
-
-    //    ssed_m_peq_ahh(dm,&mone,lm,rm,n_3mat);
   }
   else { 
     const int *tab = s.siteTable().slice();
     unordered_ssed_3mat_const_args a(l,r,d,&mone,tab,ssed_m_peq_ahh);
     dispatch_to_threads(s.numSiteTable(), a, unordered_ssed_3mat_const_evaluate_func);  
-
-    //  for(int j=0; j < s.numSiteTable(); j++) { 
-    //    int i=tab[j];
-    //    REAL64 *lm = (REAL64 *)&(l.elem(i).elem().elem(0,0).real());
-    //    REAL64 *rm = (REAL64 *)&(r.elem(i).elem().elem(0,0).real());
-    //    REAL64 *dm = (REAL64 *)&(d.elem(i).elem().elem(0,0).real());
-    //    ssed_m_peq_ahh(dm,&mone,lm,rm,1);
-    //  }
   }
 }
-
-
-
-
 
 } // namespace QDP;

@@ -41,906 +41,862 @@ namespace QDP {
 	class HDF5
 	{
 	protected:
-		hid_t error_stack, file_id, file_comm, current_group;
-		multi1d<int> reordermap;
-		bool isprefetched;
+
+	  //constructors:
+	  explicit HDF5(const long int& stripesizee=-1, const long int& maxalign=0);
+
+	  bool par_init;
+	  
+	  hid_t file_comm, error_stack, file_id, current_group;
+	  multi1d<int> reordermap;
+	  bool isprefetched;
 		
-		//Lustre optimizations
-		long int stripesize, maxalign;
-			
-		//other stuff:
-		bool par_init;
-		bool profile;
-		//copy of qmp mpi-communicator
-		MPI_Comm* mpicomm;
+	  //Lustre optimizations
+	  long int stripesize, maxalign;
+	  
+	  //other stuff:
+	  bool profile;
+	  //copy of qmp mpi-communicator
+	  MPI_Comm* mpicomm;
+	  
+	  //stack with all open groups:                  
+	  std::string getNameById(hid_t id)const;
 
-		//constructors:
-		explicit HDF5(const long int& stripesizee=-1, const long int& maxalign=0);
+	  //helper for splitting directory names
+	  void tokenize(const ::std::string& str, ::std::vector< ::std::string >& tokens, const ::std::string& delimiters);
+	  std::vector<std::string> splitPathname(const std::string& name);
+	  
+	  //check if an object exists, by iterating through the tree:
+	  bool objectExists(const std::string& name);
+	  bool objectExists(hid_t loc_id, const std::string& name);
+	  std::string objectType(const ::std::string& name);
+	  std::string objectType(hid_t loc_id, const ::std::string& name);
+	  
+	  //error handler
+	  static hid_t errorHandler(hid_t errstack, void* unused);
 
-		//stack with all open groups:                                                                                                                    
-		std::string getNameById(hid_t id)const;
+	  void HDF5_error_exit(const std::string& message){
+	    close();
+	    QDP_error_exit(message.c_str());
+	  }
 
-		//helper for splitting directory names
-		void tokenize(const ::std::string& str, ::std::vector< ::std::string >& tokens, const ::std::string& delimiters);
-		std::vector<std::string> splitPathname(const std::string& name);
-
-		//check if an object exists, by iterating through the tree:
-		bool objectExists(const std::string& name);
-		bool objectExists(hid_t loc_id, const std::string& name);
-		std::string objectType(const ::std::string& name);
-		std::string objectType(hid_t loc_id, const ::std::string& name);
-
-		//error handler
-		static hid_t errorHandler(hid_t errstack, void* unused);
-
-		void HDF5_error_exit(const std::string& message){
-			close();
-			QDP_error_exit(message.c_str());
-		}
-
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//LAYOUT HELPERS
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//prefetch mapping for CB->lexicographical:
-		int prefetchLatticeCoordinates();
-
-		//conversion: LAYOUT<-HOST
-		template<class T>
-		inline void CvtToLayout(OLattice<T>& field, void* buf, const unsigned int& nodeSites, const unsigned int& elemSize){
-			//#pragma omp parallel for shared(nodeSites,elemSize,buf,field) default(shared)
-			for(unsigned int run=0; run<nodeSites; run++){
-				memcpy(&(field.elem(reordermap[run])),reinterpret_cast<char*>(buf)+run*elemSize,elemSize);
-			}
-		}
+	  //LAYOUT HELPERS
+	  //prefetch mapping for CB->lexicographical:
+	  int prefetchLatticeCoordinates();
+	  
+	  //conversion: LAYOUT<-HOST
+	  template<class T>
+	  inline void CvtToLayout(OLattice<T>& field, void* buf, const unsigned int& nodeSites, const unsigned int& elemSize){
+	    for(unsigned int run=0; run<nodeSites; run++){
+	      memcpy(&(field.elem(reordermap[run])),reinterpret_cast<char*>(buf)+run*elemSize,elemSize);
+	    }
+	  }
 		
-		template<class T>
-		inline void CvtToLayout(multi1d< OLattice<T> >& fieldarray, void* buf, const unsigned int& nodeSites, const unsigned int& arraySize, const unsigned int& elemSize){
-			//#pragma omp parallel for shared(nodeSites,arraySize,elemSize,buf,fieldarray) default(shared)
-			for(unsigned int run=0; run<nodeSites; run++){
-				for(unsigned int dd=0; dd<arraySize; dd++){
-					memcpy(&(fieldarray[dd].elem(reordermap[run])),reinterpret_cast<char*>(buf)+(dd+arraySize*run)*elemSize,elemSize);
-				}
-			}
-		}
+	  template<class T>
+	  inline void CvtToLayout(multi1d< OLattice<T> >& fieldarray, void* buf, const unsigned int& nodeSites, const unsigned int& arraySize, const unsigned int& elemSize){
+	    for(unsigned int run=0; run<nodeSites; run++){
+	      for(unsigned int dd=0; dd<arraySize; dd++){
+		memcpy(&(fieldarray[dd].elem(reordermap[run])),reinterpret_cast<char*>(buf)+(dd+arraySize*run)*elemSize,elemSize);
+	      }
+	    }
+	  }
 		
-		//conversion: HOST<-LAYOUT
-		template<class T>
-		inline void CvtToHost(void* buf, const OLattice<T>& field, const unsigned int& nodeSites, const unsigned int& elemSize){
-			//#pragma omp parallel for shared(nodeSites,elemSize,buf,field) default(shared)
-			for(unsigned int run=0; run<nodeSites; run++){
-				memcpy(reinterpret_cast<char*>(buf)+run*elemSize,&(field.elem(reordermap[run])),elemSize);
-			}
-		}
+	  //conversion: HOST<-LAYOUT
+	  template<class T>
+	  inline void CvtToHost(void* buf, const OLattice<T>& field, const unsigned int& nodeSites, const unsigned int& elemSize){
+	    for(unsigned int run=0; run<nodeSites; run++){
+	      memcpy(reinterpret_cast<char*>(buf)+run*elemSize,&(field.elem(reordermap[run])),elemSize);
+	    }
+	  }
 
-		template<class T>
-		inline void CvtToHost(void* buf, const multi1d< OLattice<T> >& fieldarray, const unsigned int& nodeSites, const unsigned int& arraySize, const unsigned int& elemSize){
-			//#pragma omp parallel for shared(nodeSites,arraySize,elemSize,buf,fieldarray) default(shared)
-			for(unsigned int run=0; run<nodeSites; run++){
-				for(unsigned int dd=0; dd<arraySize; dd++){
-					memcpy(reinterpret_cast<char*>(buf)+(dd+arraySize*run)*elemSize,&(fieldarray[dd].elem(reordermap[run])),elemSize);
-				}
-			}
-		}
+	  template<class T>
+	  inline void CvtToHost(void* buf, const multi1d< OLattice<T> >& fieldarray, const unsigned int& nodeSites, const unsigned int& arraySize, const unsigned int& elemSize){
+	    for(unsigned int run=0; run<nodeSites; run++){
+	      for(unsigned int dd=0; dd<arraySize; dd++){
+		memcpy(reinterpret_cast<char*>(buf)+(dd+arraySize*run)*elemSize,&(fieldarray[dd].elem(reordermap[run])),elemSize);
+	      }
+	    }
+	  }
 
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//DATATYPE HELPERS
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//create complex
-		hid_t createComplexType(const unsigned int& float_size);
+	  //DATATYPE HELPERS
+	  //create complex
+	  hid_t createComplexType(const unsigned int& float_size);
 
-		//check complex:
-		bool checkComplexType(const hid_t& type_id, hid_t& base_type_id);
+	  //check complex:
+	  bool checkComplexType(const hid_t& type_id, hid_t& base_type_id);
 
-		//create colormat
-		hid_t createColorMatrixType(const hid_t& complex_id, const unsigned int& rank);
+	  //create colormat
+	  hid_t createColorMatrixType(const hid_t& complex_id, const unsigned int& rank);
 
-		//check colormat:
-		bool checkColorMatrixType(const hid_t& type_id, const unsigned int& rank, hid_t& base_type_id);
+	  //check colormat:
+	  bool checkColorMatrixType(const hid_t& type_id, const unsigned int& rank, hid_t& base_type_id);
 		
-		//create propagator
-		hid_t createPropagatorType(const hid_t& colmat_id, const unsigned int& spinrank);
+	  //create propagator
+	  hid_t createPropagatorType(const hid_t& colmat_id, const unsigned int& spinrank);
 		
-		//check propagator
-		bool checkDiracPropagatorType(const hid_t& type_id, const unsigned int& spinrank, const unsigned int& colorrank, hid_t& base_type_id);
+	  //check propagator
+	  bool checkDiracPropagatorType(const hid_t& type_id, const unsigned int& spinrank, const unsigned int& colorrank, hid_t& base_type_id);
 				
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//READING ATTRIBUTES HELPERS                                                                                                         
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//private read helper routines
-		template<typename ctype>
-		void rdAtt(const std::string& obj_name, const std::string& attr_name, ctype& datum, const H5T_class_t& hdfclass, const bool& sign, const bool& rigid_checks=true){
-			//get datatype properties:
-			unsigned int size=sizeof(ctype);
+	  //READING ATTRIBUTES HELPERS
+	  //private read helper routines
+	  template<typename ctype>
+	  void rdAtt(const std::string& obj_name, const std::string& attr_name, ctype& datum, const H5T_class_t& hdfclass, const bool& sign, const bool& rigid_checks=true){
+	    //get datatype properties:
+	    unsigned int size=sizeof(ctype);
 
-			std::string oname(obj_name), aname(attr_name);
-			bool exists=objectExists(current_group,oname);
-			if(!exists){
-				HDF5_error_exit("HDF5Reader::readAttribute: error, object "+oname+" you try to read attribute from does not exists!");
-			}
+	    std::string oname(obj_name), aname(attr_name);
+	    bool exists=objectExists(current_group,oname);
+	    if(!exists){
+	      HDF5_error_exit("HDF5Reader::readAttribute: error, object "+oname+" you try to read attribute from does not exists!");
+	    }
 
-			//do sanity checks and get datatype 
-			hid_t ex=H5Aexists_by_name(current_group,oname.c_str(),aname.c_str(),H5P_DEFAULT);
-			if(ex!=1){
-				HDF5_error_exit("HDF5Reader::readAttribute: error, the attribute "+aname+" you try to read does not exists!");
-			}
-			hid_t attr_id=H5Aopen_by_name(current_group,oname.c_str(),aname.c_str(),H5P_DEFAULT,H5P_DEFAULT);
-			if(attr_id<0){
-				HDF5_error_exit("HDF5Reader::readAttribute: error, cannot open attribute "+aname+" attached to "+oname+"!");
-			}
-			hid_t type_id=H5Aget_type(attr_id);
-			if(H5Tget_class(type_id)!=hdfclass){
-				HDF5_error_exit("HDF5Reader::readAttribute: error reading "+attr_name+" , datatype type mismatch!");
-			}
-			if(rigid_checks){
-				if(H5Tget_size(type_id)!=size){
-					HDF5_error_exit("HDF5Reader::readAttribute: error reading "+attr_name+", datatype size mismatch!");
-				}
-				if( hdfclass==H5T_INTEGER ){
-					if(sign){
-						if(H5Tget_sign(type_id)!=H5T_SGN_2){
-							HDF5_error_exit("HDF5Reader::readAttribute: error reading "+attr_name+", datatype sign mismatch!");
-						}
-					}
-					else{
-						if(H5Tget_sign(type_id)!=H5T_SGN_NONE){
-							HDF5_error_exit("HDF5Reader::readAttribute: error reading "+attr_name+", datatype sign mismatch!");
-						}
-					}
-				}
-			}
-
-			//read
-			hid_t nat_type_id=H5Tget_native_type(type_id,H5T_DIR_ASCEND);
-			hid_t errhandle=H5Aread(attr_id,nat_type_id,reinterpret_cast<void*>(&datum));
-			errhandle=H5Aclose(attr_id);
-			errhandle=H5Tclose(nat_type_id);
-			errhandle=H5Tclose(type_id);
+	    //do sanity checks and get datatype 
+	    hid_t ex=H5Aexists_by_name(current_group,oname.c_str(),aname.c_str(),H5P_DEFAULT);
+	    if(ex!=1){
+	      HDF5_error_exit("HDF5Reader::readAttribute: error, the attribute "+aname+" you try to read does not exists!");
+	    }
+	    hid_t attr_id=H5Aopen_by_name(current_group,oname.c_str(),aname.c_str(),H5P_DEFAULT,H5P_DEFAULT);
+	    if(attr_id<0){
+	      HDF5_error_exit("HDF5Reader::readAttribute: error, cannot open attribute "+aname+" attached to "+oname+"!");
+	    }
+	    hid_t type_id=H5Aget_type(attr_id);
+	    if(H5Tget_class(type_id)!=hdfclass){
+	      HDF5_error_exit("HDF5Reader::readAttribute: error reading "+attr_name+" , datatype type mismatch!");
+	    }
+	    if(rigid_checks){
+	      if(H5Tget_size(type_id)!=size){
+		HDF5_error_exit("HDF5Reader::readAttribute: error reading "+attr_name+", datatype size mismatch!");
+	      }
+	      if( hdfclass==H5T_INTEGER ){
+		if(sign){
+		  if(H5Tget_sign(type_id)!=H5T_SGN_2){
+		    HDF5_error_exit("HDF5Reader::readAttribute: error reading "+attr_name+", datatype sign mismatch!");
+		  }
 		}
+		else{
+		  if(H5Tget_sign(type_id)!=H5T_SGN_NONE){
+		    HDF5_error_exit("HDF5Reader::readAttribute: error reading "+attr_name+", datatype sign mismatch!");
+		  }
+		}
+	      }
+	    }
 
-		template<typename ctype>
-		void rdAtt(const std::string& obj_name, const std::string& attr_name, multi1d<ctype>& datum, const H5T_class_t& hdfclass, const bool& sign, const bool& rigid_checks=true){
-			//get datatype properties:
-			unsigned int size=sizeof(ctype);
+	    //read
+	    hid_t nat_type_id=H5Tget_native_type(type_id,H5T_DIR_ASCEND);
+	    H5Aread(attr_id,nat_type_id,reinterpret_cast<void*>(&datum));
+	    H5Aclose(attr_id);
+	    H5Tclose(nat_type_id);
+	    H5Tclose(type_id);
+	  }
 
-			std::string oname(obj_name), aname(attr_name);
-			bool exists=objectExists(current_group,oname);
-			if(!exists){
-				HDF5_error_exit("HDF5Reader::readAttribute: error, object "+oname+" you try to read attribute from does not exists!");
-			}
+	  template<typename ctype>
+	  void rdAtt(const std::string& obj_name, const std::string& attr_name, multi1d<ctype>& datum, const H5T_class_t& hdfclass, const bool& sign, const bool& rigid_checks=true){
+	    //get datatype properties:
+	    unsigned int size=sizeof(ctype);
+
+	    std::string oname(obj_name), aname(attr_name);
+	    bool exists=objectExists(current_group,oname);
+	    if(!exists){
+	      HDF5_error_exit("HDF5Reader::readAttribute: error, object "+oname+" you try to read attribute from does not exists!");
+	    }
       
-			//do sanity checks and get datatype
-			hid_t ex=H5Aexists_by_name(current_group,oname.c_str(),aname.c_str(),H5P_DEFAULT);
-			if(ex!=1){
-				HDF5_error_exit("HDF5Reader::readAttribute: error, the attribute "+aname+" you try to read does not exists!");
-			}
-			hid_t attr_id=H5Aopen_by_name(current_group,oname.c_str(),aname.c_str(),H5P_DEFAULT,H5P_DEFAULT);
-			if(attr_id<0){
-				HDF5_error_exit("HDF5Reader::readAttribute: error, cannot open attribute "+aname+" attached to "+oname+"!");
-			}
-			hid_t type_id=H5Aget_type(attr_id);
-			if(H5Tget_class(type_id)!=hdfclass){
-				HDF5_error_exit("HDF5Reader::readAttribute: error reading "+attr_name+", datatype mismatch!");
-			}
-			if(rigid_checks){
-				if(H5Tget_size(type_id)!=size){
-					HDF5_error_exit("HDF5Reader::readAttribute: error reading "+attr_name+", datatype size mismatch!");
-				}
-				if( hdfclass==H5T_INTEGER ){
-					if(sign){
-						if(H5Tget_sign(type_id)!=H5T_SGN_2){
-							HDF5_error_exit("HDF5Reader::readAttribute: error reading "+attr_name+", datatype sign mismatch!");
-						}
-					} 
-					else{
-						if(H5Tget_sign(type_id)!=H5T_SGN_NONE){
-							HDF5_error_exit("HDF5Reader::readAttribute: error reading "+attr_name+", datatype sign mismatch!");
-						}
-					}
-				}
-			}
-
-			//read
-			hid_t space_id=H5Aget_space(attr_id);
-			if(space_id<0){
-				HDF5_error_exit("HDF5Reader::readAttribute: cannot open dataspace.");
-			}
-			hsize_t space_size=H5Sget_simple_extent_npoints(space_id);
-			H5Sclose(space_id);
-			ctype* token=new ctype[space_size];
-			hid_t nat_type_id=H5Tget_native_type(type_id,H5T_DIR_ASCEND);
-			herr_t errhandle=H5Aread(attr_id,nat_type_id,reinterpret_cast<void*>(token));
-			H5Aclose(attr_id);
-			H5Tclose(nat_type_id);
-			H5Tclose(type_id);
-			datum.resize(space_size);
-			for(hsize_t i=0; i<space_size; i++) datum[i]=token[i];
-			delete [] token;
+	    //do sanity checks and get datatype
+	    hid_t ex=H5Aexists_by_name(current_group,oname.c_str(),aname.c_str(),H5P_DEFAULT);
+	    if(ex!=1){
+	      HDF5_error_exit("HDF5Reader::readAttribute: error, the attribute "+aname+" you try to read does not exists!");
+	    }
+	    hid_t attr_id=H5Aopen_by_name(current_group,oname.c_str(),aname.c_str(),H5P_DEFAULT,H5P_DEFAULT);
+	    if(attr_id<0){
+	      HDF5_error_exit("HDF5Reader::readAttribute: error, cannot open attribute "+aname+" attached to "+oname+"!");
+	    }
+	    hid_t type_id=H5Aget_type(attr_id);
+	    if(H5Tget_class(type_id)!=hdfclass){
+	      HDF5_error_exit("HDF5Reader::readAttribute: error reading "+attr_name+", datatype mismatch!");
+	    }
+	    if(rigid_checks){
+	      if(H5Tget_size(type_id)!=size){
+		HDF5_error_exit("HDF5Reader::readAttribute: error reading "+attr_name+", datatype size mismatch!");
+	      }
+	      if( hdfclass==H5T_INTEGER ){
+		if(sign){
+		  if(H5Tget_sign(type_id)!=H5T_SGN_2){
+		    HDF5_error_exit("HDF5Reader::readAttribute: error reading "+attr_name+", datatype sign mismatch!");
+		  }
+		} 
+		else{
+		  if(H5Tget_sign(type_id)!=H5T_SGN_NONE){
+		    HDF5_error_exit("HDF5Reader::readAttribute: error reading "+attr_name+", datatype sign mismatch!");
+		  }
 		}
+	      }
+	    }
 
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//READING DATASETS HELPERS                                                                                                           
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		template<typename ctype>
-		void rd(const std::string& dataname, ctype& datum, const H5T_class_t& hdfclass, const bool& sign, const bool& rigid_checks=true){
-			//get datatype properties:
-			unsigned int size=sizeof(ctype);
+	    //read
+	    hid_t space_id=H5Aget_space(attr_id);
+	    if(space_id<0){
+	      HDF5_error_exit("HDF5Reader::readAttribute: cannot open dataspace.");
+	    }
+	    hsize_t space_size=H5Sget_simple_extent_npoints(space_id);
+	    H5Sclose(space_id);
+	    ctype* token=new ctype[space_size];
+	    hid_t nat_type_id=H5Tget_native_type(type_id,H5T_DIR_ASCEND);
+	    H5Aread(attr_id,nat_type_id,reinterpret_cast<void*>(token));
+	    H5Aclose(attr_id);
+	    H5Tclose(nat_type_id);
+	    H5Tclose(type_id);
+	    datum.resize(space_size);
+	    for(hsize_t i=0; i<space_size; i++) datum[i]=token[i];
+	    delete [] token;
+	  }
 
-			std::string dname(dataname);
-			bool exists=objectExists(current_group,dname);
-			if(!exists){
-				HDF5_error_exit("HDF5Reader::read: error, dataset does not exists!");
-			}
-			H5O_info_t objinfo;
-			herr_t errhandle=H5Oget_info_by_name(current_group,dname.c_str(),&objinfo,H5P_DEFAULT);
-			if(objinfo.type!=H5O_TYPE_DATASET){
-				HDF5_error_exit("HDF5Reader::read: error, "+dname+" exists but it is not a dataset!");
-			}
-			hid_t dset_id=H5Dopen(current_group,dname.c_str(),H5P_DEFAULT);
-			if(dset_id<0){
-				HDF5_error_exit("HDF5Reader::read: error reading "+dataname+", cannot open dataset!");
-			}
-			hid_t type_id=H5Dget_type(dset_id);
-			if(H5Tget_class(type_id)!=hdfclass){
-				HDF5_error_exit("HDF5Reader::read: error reading "+dataname+", datatype mismatch!");
-			}
-			//do sanity checks and get datatype 
-			if(rigid_checks){
-				if(H5Tget_size(type_id)!=size){
-					HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype size mismatch!");
-				}
-				if( hdfclass==H5T_INTEGER ){
-					if(sign){
-						if(H5Tget_sign(type_id)!=H5T_SGN_2){
-							HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype sign mismatch!");
-						}
-					} 
-					else{
-						if(H5Tget_sign(type_id)!=H5T_SGN_NONE){
-							HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype sign mismatch!");
-						}
-					}
-				}
-			}
+	  //READING DATASETS HELPERS
+	  template<typename ctype>
+	  void rd(const std::string& dataname, ctype& datum, const H5T_class_t& hdfclass, const bool& sign, const bool& rigid_checks=true){
+	    //get datatype properties:
+	    unsigned int size=sizeof(ctype);
 
-			//read
-			hid_t plist_id = H5Pcreate(H5P_DATASET_XFER);
-			H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
-			hid_t nat_type_id=H5Tget_native_type(type_id,H5T_DIR_ASCEND);
-			H5Dread(dset_id,nat_type_id,H5S_ALL,H5S_ALL,plist_id,static_cast<void*>(&datum));
-			H5Pclose(plist_id);
-			H5Dclose(dset_id);
-			H5Tclose(nat_type_id);
-			H5Tclose(type_id);
+	    std::string dname(dataname);
+	    bool exists=objectExists(current_group,dname);
+	    if(!exists){
+	      HDF5_error_exit("HDF5Reader::read: error, dataset does not exists!");
+	    }
+	    H5O_info_t objinfo;
+	    H5Oget_info_by_name(current_group,dname.c_str(),&objinfo,H5P_DEFAULT);
+	    if(objinfo.type!=H5O_TYPE_DATASET){
+	      HDF5_error_exit("HDF5Reader::read: error, "+dname+" exists but it is not a dataset!");
+	    }
+	    hid_t dset_id=H5Dopen(current_group,dname.c_str(),H5P_DEFAULT);
+	    if(dset_id<0){
+	      HDF5_error_exit("HDF5Reader::read: error reading "+dataname+", cannot open dataset!");
+	    }
+	    hid_t type_id=H5Dget_type(dset_id);
+	    if(H5Tget_class(type_id)!=hdfclass){
+	      HDF5_error_exit("HDF5Reader::read: error reading "+dataname+", datatype mismatch!");
+	    }
+	    //do sanity checks and get datatype 
+	    if(rigid_checks){
+	      if(H5Tget_size(type_id)!=size){
+		HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype size mismatch!");
+	      }
+	      if( hdfclass==H5T_INTEGER ){
+		if(sign){
+		  if(H5Tget_sign(type_id)!=H5T_SGN_2){
+		    HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype sign mismatch!");
+		  }
+		} 
+		else{
+		  if(H5Tget_sign(type_id)!=H5T_SGN_NONE){
+		    HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype sign mismatch!");
+		  }
 		}
+	      }
+	    }
 
-		template<typename ctype>
-		void rd(const std::string& dataname, multi1d<ctype>& datum, const H5T_class_t& hdfclass, const bool& sign, const bool& rigid_checks=true){
-			//get datatype properties:
-			unsigned int size=sizeof(ctype);
+	    //read
+	    hid_t plist_id = H5Pcreate(H5P_DATASET_XFER);
+	    H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
+	    hid_t nat_type_id=H5Tget_native_type(type_id,H5T_DIR_ASCEND);
+	    H5Dread(dset_id,nat_type_id,H5S_ALL,H5S_ALL,plist_id,static_cast<void*>(&datum));
+	    H5Pclose(plist_id);
+	    H5Dclose(dset_id);
+	    H5Tclose(nat_type_id);
+	    H5Tclose(type_id);
+	  }
 
-			std::string dname(dataname);
-			bool exists=objectExists(current_group,dname);
-			if(!exists){
-				HDF5_error_exit("HDF5::read: error reading "+dataname+", dataset does not exists!");
-			}
-			H5O_info_t objinfo;
-			herr_t errhandle=H5Oget_info_by_name(current_group,dname.c_str(),&objinfo,H5P_DEFAULT);
-			if(objinfo.type!=H5O_TYPE_DATASET){
-				HDF5_error_exit("HDF5::read: error, "+dname+" exists but it is not a dataset!");
-			}
-			hid_t dset_id=H5Dopen(current_group,dname.c_str(),H5P_DEFAULT);
-			if(dset_id<0){
-				HDF5_error_exit("HDF5::read: error reading "+dataname+", cannot open dataset!");
-			}
-			hid_t type_id=H5Dget_type(dset_id);
-			if(H5Tget_class(type_id)!=hdfclass){
-				HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype mismatch!");
-			}
-			//do sanity checks and get datatype 
-			if(rigid_checks){
-				if(H5Tget_size(type_id)!=size){
-					HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype size mismatch!");
-				}
-				if( hdfclass==H5T_INTEGER ){
-					if(sign){
-						if(H5Tget_sign(type_id)!=H5T_SGN_2){
-							HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype sign mismatch!");
-						}
-					} 
-					else{
-						if(H5Tget_sign(type_id)!=H5T_SGN_NONE){
-							HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype sign mismatch!");
-						}
-					}
-				}
-			}
+	  template<typename ctype>
+	  void rd(const std::string& dataname, multi1d<ctype>& datum, const H5T_class_t& hdfclass, const bool& sign, const bool& rigid_checks=true){
+	    //get datatype properties:
+	    unsigned int size=sizeof(ctype);
 
-			//read
-			hid_t space_id=H5Dget_space(dset_id);
-			if(space_id<0){
-				HDF5_error_exit("HDF5::read: error, the dataset is corrupted!");
-			}
-			//check for correct dimensionality
-			hsize_t dim=H5Sget_simple_extent_ndims(space_id);
-			if(dim!=1){
-				HDF5_error_exit("HDF5::read: error, dimension mismatch!");
-			}
-			hsize_t space_size=H5Sget_simple_extent_npoints(space_id);
-			H5Sclose(space_id);
-			ctype* token=new ctype[space_size];
-			hid_t plist_id = H5Pcreate(H5P_DATASET_XFER);
-			H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
-			hid_t nat_type_id=H5Tget_native_type(type_id,H5T_DIR_ASCEND);
-			H5Dread(dset_id,nat_type_id,H5S_ALL,H5S_ALL,plist_id,static_cast<void*>(token));
-			H5Pclose(plist_id);
-			H5Dclose(dset_id);
-			H5Tclose(nat_type_id);
-			H5Tclose(type_id);
-			datum.resize(space_size);
-			for(hsize_t i=0; i<space_size; i++) datum[i]=token[i];
-			delete [] token;
+	    std::string dname(dataname);
+	    bool exists=objectExists(current_group,dname);
+	    if(!exists){
+	      HDF5_error_exit("HDF5::read: error reading "+dataname+", dataset does not exists!");
+	    }
+	    H5O_info_t objinfo;
+	    H5Oget_info_by_name(current_group,dname.c_str(),&objinfo,H5P_DEFAULT);
+	    if(objinfo.type!=H5O_TYPE_DATASET){
+	      HDF5_error_exit("HDF5::read: error, "+dname+" exists but it is not a dataset!");
+	    }
+	    hid_t dset_id=H5Dopen(current_group,dname.c_str(),H5P_DEFAULT);
+	    if(dset_id<0){
+	      HDF5_error_exit("HDF5::read: error reading "+dataname+", cannot open dataset!");
+	    }
+	    hid_t type_id=H5Dget_type(dset_id);
+	    if(H5Tget_class(type_id)!=hdfclass){
+	      HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype mismatch!");
+	    }
+	    //do sanity checks and get datatype 
+	    if(rigid_checks){
+	      if(H5Tget_size(type_id)!=size){
+		HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype size mismatch!");
+	      }
+	      if( hdfclass==H5T_INTEGER ){
+		if(sign){
+		  if(H5Tget_sign(type_id)!=H5T_SGN_2){
+		    HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype sign mismatch!");
+		  }
+		} 
+		else{
+		  if(H5Tget_sign(type_id)!=H5T_SGN_NONE){
+		    HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype sign mismatch!");
+		  }
 		}
+	      }
+	    }
 
-		template<typename ctype>
-		void rd(const std::string& dataname, multi2d<ctype>& datum, const H5T_class_t& hdfclass, const bool& sign, const bool& rigid_checks=true){
-			//get datatype properties:
-			unsigned int size=sizeof(ctype);
+	    //read
+	    hid_t space_id=H5Dget_space(dset_id);
+	    if(space_id<0){
+	      HDF5_error_exit("HDF5::read: error, the dataset is corrupted!");
+	    }
+	    //check for correct dimensionality
+	    hsize_t dim=H5Sget_simple_extent_ndims(space_id);
+	    if(dim!=1){
+	      HDF5_error_exit("HDF5::read: error, dimension mismatch!");
+	    }
+	    hsize_t space_size=H5Sget_simple_extent_npoints(space_id);
+	    H5Sclose(space_id);
+	    ctype* token=new ctype[space_size];
+	    hid_t plist_id = H5Pcreate(H5P_DATASET_XFER);
+	    H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
+	    hid_t nat_type_id=H5Tget_native_type(type_id,H5T_DIR_ASCEND);
+	    H5Dread(dset_id,nat_type_id,H5S_ALL,H5S_ALL,plist_id,static_cast<void*>(token));
+	    H5Pclose(plist_id);
+	    H5Dclose(dset_id);
+	    H5Tclose(nat_type_id);
+	    H5Tclose(type_id);
+	    datum.resize(space_size);
+	    for(hsize_t i=0; i<space_size; i++) datum[i]=token[i];
+	    delete [] token;
+	  }
 
-			std::string dname(dataname);
-			bool exists=objectExists(current_group,dname);
-			if(!exists){
-				HDF5_error_exit("HDF5::read: error reading "+dataname+", dataset does not exists!");
-			}
-			H5O_info_t objinfo;
-			herr_t errhandle=H5Oget_info_by_name(current_group,dname.c_str(),&objinfo,H5P_DEFAULT);
-			if(objinfo.type!=H5O_TYPE_DATASET){
-				HDF5_error_exit("HDF5::read: error, "+dname+" exists but it is not a dataset!");
-			}
-			hid_t dset_id=H5Dopen(current_group,dname.c_str(),H5P_DEFAULT);
-			if(dset_id<0){
-				HDF5_error_exit("HDF5::read: error reading "+dataname+", cannot open dataset!");
-			}
-			hid_t type_id=H5Dget_type(dset_id);
-			if(H5Tget_class(type_id)!=hdfclass){
-				HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype mismatch!");
-			}
-			//do sanity checks and get datatype 
-			if(rigid_checks){
-				if(H5Tget_size(type_id)!=size){
-					HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype size mismatch!");
-				}
-				if( hdfclass==H5T_INTEGER ){
-					if(sign){
-						if(H5Tget_sign(type_id)!=H5T_SGN_2){
-							HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype sign mismatch!");
-						}
-					} 
-					else{
-						if(H5Tget_sign(type_id)!=H5T_SGN_NONE){
-							HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype sign mismatch!");
-						}
-					}
-				}
-			}
+	  template<typename ctype>
+	  void rd(const std::string& dataname, multi2d<ctype>& datum, const H5T_class_t& hdfclass, const bool& sign, const bool& rigid_checks=true){
+	    //get datatype properties:
+	    unsigned int size=sizeof(ctype);
 
-			//read
-			hid_t space_id=H5Dget_space(dset_id);
-			if(space_id<0){
-				HDF5_error_exit("HDF5::read: error, the dataset is corrupted!");
-			}
-			hsize_t dim=H5Sget_simple_extent_ndims(space_id);
-			if(dim!=2){
-				HDF5_error_exit("HDF5::read: error, dimension mismatch!");
-			}
-			hsize_t dims[2];
-			errhandle=H5Sget_simple_extent_dims(space_id, dims, NULL);
-			hsize_t space_size=H5Sget_simple_extent_npoints(space_id);
-			H5Sclose(space_id);
-			ctype* token=new ctype[space_size];
-			hid_t plist_id = H5Pcreate(H5P_DATASET_XFER);
-			H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
-			hid_t nat_type_id=H5Tget_native_type(type_id,H5T_DIR_ASCEND);
-			H5Dread(dset_id,nat_type_id,H5S_ALL,H5S_ALL,plist_id,static_cast<void*>(token));
-			H5Pclose(plist_id);
-			H5Dclose(dset_id);
-			H5Tclose(nat_type_id);
-			H5Tclose(type_id);
-			datum.resize(dims[0],dims[1]);
-			for(hsize_t i=0; i<dims[0]; i++){
-				for(hsize_t j=0; j<dims[1]; j++){
-					datum(i,j)=token[j+dims[1]*i]; //HDF5 stores row-major
-				}
-			}
-			delete [] token;
+	    std::string dname(dataname);
+	    bool exists=objectExists(current_group,dname);
+	    if(!exists){
+	      HDF5_error_exit("HDF5::read: error reading "+dataname+", dataset does not exists!");
+	    }
+	    H5O_info_t objinfo;
+	    H5Oget_info_by_name(current_group,dname.c_str(),&objinfo,H5P_DEFAULT);
+	    if(objinfo.type!=H5O_TYPE_DATASET){
+	      HDF5_error_exit("HDF5::read: error, "+dname+" exists but it is not a dataset!");
+	    }
+	    hid_t dset_id=H5Dopen(current_group,dname.c_str(),H5P_DEFAULT);
+	    if(dset_id<0){
+	      HDF5_error_exit("HDF5::read: error reading "+dataname+", cannot open dataset!");
+	    }
+	    hid_t type_id=H5Dget_type(dset_id);
+	    if(H5Tget_class(type_id)!=hdfclass){
+	      HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype mismatch!");
+	    }
+	    //do sanity checks and get datatype 
+	    if(rigid_checks){
+	      if(H5Tget_size(type_id)!=size){
+		HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype size mismatch!");
+	      }
+	      if( hdfclass==H5T_INTEGER ){
+		if(sign){
+		  if(H5Tget_sign(type_id)!=H5T_SGN_2){
+		    HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype sign mismatch!");
+		  }
+		} 
+		else{
+		  if(H5Tget_sign(type_id)!=H5T_SGN_NONE){
+		    HDF5_error_exit("HDF5::read: error reading "+dataname+", datatype sign mismatch!");
+		  }
 		}
+	      }
+	    }
 
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//READING CUSTOM OBJECTS HELPERS                                                                                                     
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//helper routines for reading and writing objects:
-		void readPrepare(const std::string& name, hid_t& type_id);
-		void readPrepareLattice(const std::string& name, hid_t& type_id, multi1d<ullong>& sizes);
+	    //read
+	    hid_t space_id=H5Dget_space(dset_id);
+	    if(space_id<0){
+	      HDF5_error_exit("HDF5::read: error, the dataset is corrupted!");
+	    }
+	    hsize_t dim=H5Sget_simple_extent_ndims(space_id);
+	    if(dim!=2){
+	      HDF5_error_exit("HDF5::read: error, dimension mismatch!");
+	    }
+	    hsize_t dims[2];
+	    H5Sget_simple_extent_dims(space_id, dims, NULL);
+	    hsize_t space_size=H5Sget_simple_extent_npoints(space_id);
+	    H5Sclose(space_id);
+	    ctype* token=new ctype[space_size];
+	    hid_t plist_id = H5Pcreate(H5P_DATASET_XFER);
+	    H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
+	    hid_t nat_type_id=H5Tget_native_type(type_id,H5T_DIR_ASCEND);
+	    H5Dread(dset_id,nat_type_id,H5S_ALL,H5S_ALL,plist_id,static_cast<void*>(token));
+	    H5Pclose(plist_id);
+	    H5Dclose(dset_id);
+	    H5Tclose(nat_type_id);
+	    H5Tclose(type_id);
+	    datum.resize(dims[0],dims[1]);
+	    for(hsize_t i=0; i<dims[0]; i++){
+	      for(hsize_t j=0; j<dims[1]; j++){
+		datum(i,j)=token[j+dims[1]*i]; //HDF5 stores row-major
+	      }
+	    }
+	    delete [] token;
+	  }
 
-		void readLattice(const std::string& name, const hid_t& type_id, const hid_t& base_type_id,
-		const ullong& obj_size, const ullong& tot_size, char* buf, bool invert_order=true);
+	  //READING CUSTOM OBJECTS HELPERS
+	  //helper routines for reading and writing objects:
+	  void readPrepare(const std::string& name, hid_t& type_id);
+	  void readPrepareLattice(const std::string& name, hid_t& type_id, multi1d<ullong>& sizes);
+
+	  void readLattice(const std::string& name, const hid_t& type_id, const hid_t& base_type_id,
+			   const ullong& obj_size, const ullong& tot_size, char* buf, bool invert_order=true);
 
 	public:		
-		//open and close files. Open is virtual since the openmode differs for reader and writer:                                                        
-		virtual void open(const std::string& filename) = 0;
-		int close();
+	  //open and close files. Open is virtual since the openmode differs for reader and writer:                                                        
+	  virtual void open(const std::string& filename) = 0;
+	  int close();
 
-		//find out if file exists:
-		static bool check_exists(const std::string& filename);
+	  //find out if file exists:
+	  static bool check_exists(const std::string& filename);
 
-		//setting the stripesize:
-		void set_stripesize(const int& stripesizee){stripesize=stripesizee;};
+	  //setting the stripesize:
+	  void set_stripesize(const int& stripesizee){stripesize=stripesizee;};
     
-		//activate profiling
-		void set_profiling(const bool& profilee){profile=profilee;};
+	  //activate profiling
+	  void set_profiling(const bool& profilee){profile=profilee;};
 	
-		//print present working directory and parent directory:                                                                                          
-		std::string pwd()const;
-		std::string parentDir()const;
+	  //print present working directory and parent directory:                                                                                          
+	  std::string pwd()const;
+	  std::string parentDir()const;
     
-		//step back one directory:
-		void pop();
-		//change to a directory specified by dirname:
-		void cd(const std::string& dirname);
+	  //step back one directory:
+	  void pop();
+	  //change to a directory specified by dirname:
+	  void cd(const std::string& dirname);
 
-		//reading routines:
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//READING ATTRIBUTES                                                                                                                 
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//single datum
-		void readAttribute(const std::string& obj_name, const std::string& attr_name, short& datum);
-		void readAttribute(const std::string& obj_name, const std::string& attr_name, unsigned short& datum);
-		void readAttribute(const std::string& obj_name, const std::string& attr_name, int& datum);
-		void readAttribute(const std::string& obj_name, const std::string& attr_name, unsigned int& datum);
-		void readAttribute(const std::string& obj_name, const std::string& attr_name, unsigned long long& datum);
-		void readAttribute(const std::string& obj_name, const std::string& attr_name, float& datum);
-		void readAttribute(const std::string& obj_name, const std::string& attr_name, double& datum);
-		void readAttribute(const std::string& obj_name, const std::string& attr_name, std::string& datum);
+	  //reading routines:
+	  //READING ATTRIBUTES
+	  //single datum
+	  void readAttribute(const std::string& obj_name, const std::string& attr_name, short& datum);
+	  void readAttribute(const std::string& obj_name, const std::string& attr_name, unsigned short& datum);
+	  void readAttribute(const std::string& obj_name, const std::string& attr_name, int& datum);
+	  void readAttribute(const std::string& obj_name, const std::string& attr_name, unsigned int& datum);
+	  void readAttribute(const std::string& obj_name, const std::string& attr_name, unsigned long long& datum);
+	  void readAttribute(const std::string& obj_name, const std::string& attr_name, float& datum);
+	  void readAttribute(const std::string& obj_name, const std::string& attr_name, double& datum);
+	  void readAttribute(const std::string& obj_name, const std::string& attr_name, std::string& datum);
 
-		//array value
-		void readAttribute(const std::string& obj_name, const std::string& attr_name, multi1d<short>& datum);
-		void readAttribute(const std::string& obj_name, const std::string& attr_name, multi1d<unsigned short>& datum);
-		void readAttribute(const std::string& obj_name, const std::string& attr_name, multi1d<int>& datum);
-		void readAttribute(const std::string& obj_name, const std::string& attr_name, multi1d<unsigned int>& datum);
-		void readAttribute(const std::string& obj_name, const std::string& attr_name, multi1d<unsigned long long>& datum);
-		void readAttribute(const std::string& obj_name, const std::string& attr_name, multi1d<float>& datum);
-		void readAttribute(const std::string& obj_name, const std::string& attr_name, multi1d<double>& datum);
+	  //array value
+	  void readAttribute(const std::string& obj_name, const std::string& attr_name, multi1d<short>& datum);
+	  void readAttribute(const std::string& obj_name, const std::string& attr_name, multi1d<unsigned short>& datum);
+	  void readAttribute(const std::string& obj_name, const std::string& attr_name, multi1d<int>& datum);
+	  void readAttribute(const std::string& obj_name, const std::string& attr_name, multi1d<unsigned int>& datum);
+	  void readAttribute(const std::string& obj_name, const std::string& attr_name, multi1d<unsigned long long>& datum);
+	  void readAttribute(const std::string& obj_name, const std::string& attr_name, multi1d<float>& datum);
+	  void readAttribute(const std::string& obj_name, const std::string& attr_name, multi1d<double>& datum);
 
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//READING DATASETS                                                                                                                   
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//single datum
-		void read(const std::string& obj_name, short& datum);
-		void read(const std::string& obj_name, unsigned short& datum);
-		void read(const std::string& obj_name, int& datum);
-		void read(const std::string& obj_name, unsigned int& datum);
-		void read(const std::string& obj_name, unsigned long long& datum);
-		void read(const std::string& obj_name, float& datum);
-		void read(const std::string& obj_name, double& datum);
-		void read(const std::string& dataname, std::string& datum);
+	  //READING DATASETS
+	  //single datum
+	  void read(const std::string& obj_name, short& datum);
+	  void read(const std::string& obj_name, unsigned short& datum);
+	  void read(const std::string& obj_name, int& datum);
+	  void read(const std::string& obj_name, unsigned int& datum);
+	  void read(const std::string& obj_name, unsigned long long& datum);
+	  void read(const std::string& obj_name, float& datum);
+	  void read(const std::string& obj_name, double& datum);
+	  void read(const std::string& dataname, std::string& datum);
 
-		//array value
-		//1D
-		void read(const std::string& obj_name, multi1d<short>& datum);
-		void read(const std::string& obj_name, multi1d<unsigned short>& datum);
-		void read(const std::string& obj_name, multi1d<int>& datum);
-		void read(const std::string& obj_name, multi1d<unsigned int>& datum);
-		void read(const std::string& obj_name, multi1d<unsigned long long>& datum);
-		void read(const std::string& obj_name, multi1d<float>& datum);
-		void read(const std::string& obj_name, multi1d<double>& datum);
-		//2D
-		void read(const std::string& obj_name, multi2d<short>& datum);
-		void read(const std::string& obj_name, multi2d<unsigned short>& datum);
-		void read(const std::string& obj_name, multi2d<int>& datum);
-		void read(const std::string& obj_name, multi2d<unsigned int>& datum);
-		void read(const std::string& obj_name, multi2d<unsigned long long>& datum);
-		void read(const std::string& obj_name, multi2d<float>& datum);
-		void read(const std::string& obj_name, multi2d<double>& datum);
+	  //array value
+	  //1D
+	  void read(const std::string& obj_name, multi1d<short>& datum);
+	  void read(const std::string& obj_name, multi1d<unsigned short>& datum);
+	  void read(const std::string& obj_name, multi1d<int>& datum);
+	  void read(const std::string& obj_name, multi1d<unsigned int>& datum);
+	  void read(const std::string& obj_name, multi1d<unsigned long long>& datum);
+	  void read(const std::string& obj_name, multi1d<float>& datum);
+	  void read(const std::string& obj_name, multi1d<double>& datum);
+	  //2D
+	  void read(const std::string& obj_name, multi2d<short>& datum);
+	  void read(const std::string& obj_name, multi2d<unsigned short>& datum);
+	  void read(const std::string& obj_name, multi2d<int>& datum);
+	  void read(const std::string& obj_name, multi2d<unsigned int>& datum);
+	  void read(const std::string& obj_name, multi2d<unsigned long long>& datum);
+	  void read(const std::string& obj_name, multi2d<float>& datum);
+	  void read(const std::string& obj_name, multi2d<double>& datum);
 	
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//READING OSCALAR OBJECTS                                                                                                            
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//single datum
-		template<class T>
-		void read(const std::string& name, OScalar<T>& scalar)
-		{
-			//read dataset extents:
-			multi1d<ullong> sizes;
-			ullong obj_size=0;
-			hid_t type_id;
-			readPrepareLattice(name,type_id,sizes);
+	  //READING OSCALAR OBJECTS
+	  //single datum
+	  template<class T>
+	  void read(const std::string& name, OScalar<T>& scalar)
+	  {
+	    //read dataset extents:
+	    multi1d<ullong> sizes;
+	    ullong obj_size=0;
+	    hid_t type_id;
+	    readPrepareLattice(name,type_id,sizes);
 
-			//sanity check:
-			ullong float_size=H5Tget_size(type_id);
-			if( float_size!=4 && float_size!=8 ){
-				HDF5_error_exit("HDF5Reader::read: error, datatype mismatch!\n");
-			}
-			H5Tclose(type_id);
-			if(sizes.size()!=1){
-				HDF5_error_exit("HDF5Reader::read: error, wrong dimensionality!");
-			}
-			obj_size=sizes[0];
-			if( (obj_size*float_size) != sizeof(T) ){
-				HDF5_error_exit("HDF5Reader::read: error size of input vectors differ from those in record!\n");
-			}
+	    //sanity check:
+	    ullong float_size=H5Tget_size(type_id);
+	    if( float_size!=4 && float_size!=8 ){
+	      HDF5_error_exit("HDF5Reader::read: error, datatype mismatch!\n");
+	    }
+	    H5Tclose(type_id);
+	    if(sizes.size()!=1){
+	      HDF5_error_exit("HDF5Reader::read: error, wrong dimensionality!");
+	    }
+	    obj_size=sizes[0];
+	    if( (obj_size*float_size) != sizeof(T) ){
+	      HDF5_error_exit("HDF5Reader::read: error size of input vectors differ from those in record!\n");
+	    }
 
-			//read data:
-			multi1d<REAL> buf(obj_size);
-			if(float_size==4){
-				multi1d<float> buf32(obj_size);
-				this->read(name,buf32);
-				for(ullong i=0; i<obj_size; i++) buf[i]=static_cast<REAL>(buf32[i]);
-			}
-			else{
-				multi1d<double> buf64(obj_size);
-				this->read(name,buf64);
-				for(ullong i=0; i<obj_size; i++) buf[i]=static_cast<REAL>(buf64[i]);
-			}
-			memcpy(reinterpret_cast<void*>(&scalar.elem()),&buf[0],sizeof(T));
-		}
+	    //read data:
+	    multi1d<REAL> buf(obj_size);
+	    if(float_size==4){
+	      multi1d<float> buf32(obj_size);
+	      this->read(name,buf32);
+	      for(ullong i=0; i<obj_size; i++) buf[i]=static_cast<REAL>(buf32[i]);
+	    }
+	    else{
+	      multi1d<double> buf64(obj_size);
+	      this->read(name,buf64);
+	      for(ullong i=0; i<obj_size; i++) buf[i]=static_cast<REAL>(buf64[i]);
+	    }
+	    memcpy(reinterpret_cast<void*>(&scalar.elem()),&buf[0],sizeof(T));
+	  }
     
-		//array
-		template<class T>
-		void read(const std::string& name, multi1d< OScalar<T> >& scalararray)
-		{
-			//read dataset extents:
-			multi1d<ullong> sizes;
-			ullong obj_size=0;
-			hid_t type_id;
-			readPrepareLattice(name,type_id,sizes);
+	  //array
+	  template<class T>
+	  void read(const std::string& name, multi1d< OScalar<T> >& scalararray)
+	  {
+	    //read dataset extents:
+	    multi1d<ullong> sizes;
+	    ullong obj_size=0;
+	    hid_t type_id;
+	    readPrepareLattice(name,type_id,sizes);
 
-			//sanity check:
-			ullong float_size=H5Tget_size(type_id);
-			if( float_size!=4 && float_size!=8 ){
-				HDF5_error_exit("HDF5Reader::read: error, datatype mismatch!\n");
-			}
-			H5Tclose(type_id);
-			if(sizes.size()!=1){
-				HDF5_error_exit("HDF5Reader::read: error, wrong dimensionality!\n");
-			}
-			obj_size=sizes[0];
-			if( (obj_size*float_size)%sizeof(T) != 0 ){
-				HDF5_error_exit("HDF5Reader::read: error size of input vectors differ from those in record!\n");
-			}
-			ullong arr_size=(obj_size*float_size)/sizeof(T);
-			obj_size/=arr_size;
+	    //sanity check:
+	    ullong float_size=H5Tget_size(type_id);
+	    if( float_size!=4 && float_size!=8 ){
+	      HDF5_error_exit("HDF5Reader::read: error, datatype mismatch!\n");
+	    }
+	    H5Tclose(type_id);
+	    if(sizes.size()!=1){
+	      HDF5_error_exit("HDF5Reader::read: error, wrong dimensionality!\n");
+	    }
+	    obj_size=sizes[0];
+	    if( (obj_size*float_size)%sizeof(T) != 0 ){
+	      HDF5_error_exit("HDF5Reader::read: error size of input vectors differ from those in record!\n");
+	    }
+	    ullong arr_size=(obj_size*float_size)/sizeof(T);
+	    obj_size/=arr_size;
 
-			//read data:
-			multi1d<REAL> buf(obj_size*arr_size);
-			if(float_size==4){
-				multi1d<float> buf32(obj_size*arr_size);
-				this->read(name,buf32);
-				for(ullong i=0; i<(obj_size*arr_size); i++) buf[i]=static_cast<REAL>(buf32[i]);
-			}
-			else{
-				multi1d<double> buf64(obj_size*arr_size);
-				this->read(name,buf64);
-				for(ullong i=0; i<(obj_size*arr_size); i++) buf[i]=static_cast<REAL>(buf64[i]);
-			}
-			scalararray.resize(arr_size);
-			for(ullong i=0; i<arr_size; i++){
-				memcpy(reinterpret_cast<void*>(&scalararray[i].elem()),&buf[i*obj_size],sizeof(T));
-			}
-		}
+	    //read data:
+	    multi1d<REAL> buf(obj_size*arr_size);
+	    if(float_size==4){
+	      multi1d<float> buf32(obj_size*arr_size);
+	      this->read(name,buf32);
+	      for(ullong i=0; i<(obj_size*arr_size); i++) buf[i]=static_cast<REAL>(buf32[i]);
+	    }
+	    else{
+	      multi1d<double> buf64(obj_size*arr_size);
+	      this->read(name,buf64);
+	      for(ullong i=0; i<(obj_size*arr_size); i++) buf[i]=static_cast<REAL>(buf64[i]);
+	    }
+	    scalararray.resize(arr_size);
+	    for(ullong i=0; i<arr_size; i++){
+	      memcpy(reinterpret_cast<void*>(&scalararray[i].elem()),&buf[i*obj_size],sizeof(T));
+	    }
+	  }
     
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//READING OLATTICE OBJECTS                                                                                                           
-		//***********************************************************************************************************************************
-		//***********************************************************************************************************************************
-		//read OLattice object:
-		template<class T>
-		void read(const std::string& name, OLattice<T>& field, const HDF5Base::accessmode& accmode=HDF5Base::transpose_order)
-		{
-			StopWatch swatch_datatypes, swatch_prepare, swatch_reorder, swatch_read;
+	  //READING OLATTICE OBJECTS
+	  //read OLattice object:
+	  template<class T>
+	  void read(const std::string& name, OLattice<T>& field, const HDF5Base::accessmode& accmode=HDF5Base::transpose_order)
+	  {
+	    StopWatch swatch_datatypes, swatch_prepare, swatch_reorder, swatch_read;
 			
-			//define a new type
-			typedef typename WordType<T>::Type_t wtd;
+	    //define a new type
+	    typedef typename WordType<T>::Type_t wtd;
 			
-			bool invert_order;
-			switch(accmode){
-				case HDF5Base::transpose_order:
-					invert_order=true;
-					break;
-				case HDF5Base::maintain_order:
-					invert_order=false;
-					break;
-			}
+	    bool invert_order;
+	    switch(accmode){
+	    case HDF5Base::transpose_order:
+	      invert_order=true;
+	      break;
+	    case HDF5Base::maintain_order:
+	      invert_order=false;
+	      break;
+	    }
 			
-			//read dataset extents:
-			if(profile) swatch_prepare.start();
-			multi1d<ullong> sizes;
-			ullong obj_size=0;
-			hid_t type_id;
-			readPrepareLattice(name,type_id,sizes);
-			if(profile) swatch_prepare.stop();
+	    //read dataset extents:
+	    if(profile) swatch_prepare.start();
+	    multi1d<ullong> sizes;
+	    ullong obj_size=0;
+	    hid_t type_id;
+	    readPrepareLattice(name,type_id,sizes);
+	    if(profile) swatch_prepare.stop();
 
-			//sanity checks for datatypes:
-			if(profile) swatch_datatypes.start();
-			ullong hdf5_float_size=H5Tget_size(type_id);
-			ullong field_float_size=sizeof(wtd);
+	    //sanity checks for datatypes:
+	    if(profile) swatch_datatypes.start();
+	    ullong hdf5_float_size=H5Tget_size(type_id);
+	    ullong field_float_size=sizeof(wtd);
 			
-			//checks
-			if( hdf5_float_size!=4 && hdf5_float_size!=8 ){
-				HDF5_error_exit("HDF5Reader::read: error, datatype mismatch. The datatype should be either 32 or 64 bit!\n");
-			}
-			if(sizes.size()!=(Nd+1)){
-				HDF5_error_exit("HDF5Reader::read: error, wrong dimensionality!");
-			}
-			if(invert_order){
-				for(unsigned int dd=0; dd<Nd; dd++){
-					if(sizes[Nd-dd-1]!=Layout::lattSize()[dd]){
-						HDF5_error_exit("HDF5Reader::read: mismatching lattice extents.");
-					}
-				}
-			}
-			else{
-				for(unsigned int dd=0; dd<Nd; dd++){
-					if(sizes[dd]!=Layout::lattSize()[dd]){
-						HDF5_error_exit("HDF5Reader::read: mismatching lattice extents.");
-					}
-				}
-			}
-			obj_size=sizes[Nd];
-			//if( (obj_size*hdf5_float_size) != sizeof(T) ){
-			//	HDF5_error_exit("HDF5Reader::read: error size of input vectors differ from those in record!");
-			//}
-			if(profile) swatch_datatypes.stop();
-
-			//determine local sizes, allocate memory and read
-			if(profile) swatch_read.start();
-			const int mynode=Layout::nodeNumber();
-			const int nodeSites = Layout::sitesOnNode();
-			size_t tot_size = obj_size*nodeSites;
-			char* buf = new(std::nothrow) char[tot_size*hdf5_float_size];
-			if( buf == 0x0 ) {
-				HDF5_error_exit("Unable to allocate buf\n");
-			}
-			readLattice(name,type_id,type_id,obj_size,tot_size,buf,invert_order);
-			H5Tclose(type_id);
-			if(profile) swatch_read.stop();
-
-			//put lattice into u-field and reconstruct as well as reorder them on the fly:
-			// Reconstruct the gauge field
-			if(profile) swatch_reorder.start();
-			/*#pragma omp parallel for firstprivate(nodeSites,obj_size,float_size) shared(buf,field)
-			for(unsigned int run=0; run<nodeSites; run++){
-			memcpy(&(field.elem(reordermap[run])),reinterpret_cast<char*>(buf+run*obj_size),float_size*obj_size);
-			}*/
-			if(hdf5_float_size==field_float_size){
-				//convert layout directly
-				CvtToLayout(field,reinterpret_cast<void*>(buf),nodeSites,sizeof(T));
-			}
-			else{
-				//convert precision first
-				wtd* tmpbuf=new wtd[tot_size];
-				for(unsigned int i=0; i<tot_size; i++){
-					if(hdf5_float_size==4){
-						REAL32 tmpfloat;
-						memcpy(&tmpfloat,&buf[i*hdf5_float_size],hdf5_float_size);
-						tmpbuf[i]=static_cast< wtd >(tmpfloat);
-					}
-					else{
-						REAL64 tmpfloat;
-						memcpy(&tmpfloat,&buf[i*hdf5_float_size],hdf5_float_size);
-						tmpbuf[i]=static_cast< wtd >(tmpfloat);
-					}
-				}
-				CvtToLayout(field,reinterpret_cast<void*>(tmpbuf),nodeSites,sizeof(T));
-				delete [] tmpbuf;
-			}
-			delete [] buf;
-			if(profile) swatch_reorder.stop();
-			
-			if(profile){
-				QDPIO::cout << "HDF5-I/O statistics. Read:" << std::endl;
-				QDPIO::cout << "\t preparing: " << swatch_prepare.getTimeInSeconds() << std::endl;
-				QDPIO::cout << "\t datatype-handling: " << swatch_datatypes.getTimeInSeconds() << std::endl;
-				QDPIO::cout << "\t reordering: " << swatch_reorder.getTimeInSeconds() << std::endl;
-				QDPIO::cout << "\t read: " << swatch_read.getTimeInSeconds() << std::endl;
-				QDPIO::cout << "\t MB read: " << static_cast<int>(Layout::vol()*obj_size*hdf5_float_size)/1024/1024 << std::endl;
-			}
+	    //checks
+	    if( hdf5_float_size!=4 && hdf5_float_size!=8 ){
+	      HDF5_error_exit("HDF5Reader::read: error, datatype mismatch. The datatype should be either 32 or 64 bit!\n");
+	    }
+	    if(sizes.size()!=(Nd+1)){
+	      HDF5_error_exit("HDF5Reader::read: error, wrong dimensionality!");
+	    }
+	    if(invert_order){
+	      for(unsigned int dd=0; dd<Nd; dd++){
+		if(sizes[Nd-dd-1]!=Layout::lattSize()[dd]){
+		  HDF5_error_exit("HDF5Reader::read: mismatching lattice extents.");
 		}
-
-		//read multi1d<OLattice> object: 
-		template<class T>
-		void read(const std::string& name, multi1d< OLattice<T> >& fieldarray, const HDF5Base::accessmode& accmode=HDF5Base::transpose_order)
-		{
-			StopWatch swatch_datatypes, swatch_prepare, swatch_reorder, swatch_read;
-			
-			//define a new type
-			typedef typename WordType<T>::Type_t wtd;
-			
-			bool invert_order;
-			switch(accmode){
-				case HDF5Base::transpose_order:
-					invert_order=true;
-					break;
-				case HDF5Base::maintain_order:
-					invert_order=false;
-					break;
-			}
-			
-			//read dataset extents:
-			if(profile) swatch_prepare.start();
-			multi1d<ullong> sizes;
-			ullong obj_size=0;
-			hid_t type_id;
-			readPrepareLattice(name,type_id,sizes);
-			swatch_prepare.stop();
-
-			//check sanity
-			if(profile) swatch_datatypes.start();
-			ullong hdf5_float_size=H5Tget_size(type_id);
-			ullong field_float_size=sizeof(wtd);
-			
-			//checks
-			if( hdf5_float_size!=4 && hdf5_float_size!=8 ){
-				HDF5_error_exit("HDF5Reader::read: error, datatype mismatch. The datatype should be either 32 or 64 bit!\n");
-			}
-			if(sizes.size()!=(Nd+1)){
-				HDF5_error_exit("HDF5Reader::read: error, wrong dimensionality!");
-			}
-			if(invert_order){
-				for(unsigned int dd=0; dd<Nd; dd++){
-					if(sizes[Nd-dd-1]!=Layout::lattSize()[dd]){
-						HDF5_error_exit("HDF5Reader::read: mismatching lattice extents.");
-					}
-				}
-			}
-			else{
-				for(unsigned int dd=0; dd<Nd; dd++){
-					if(sizes[dd]!=Layout::lattSize()[dd]){
-						HDF5_error_exit("HDF5Reader::read: mismatching lattice extents.");
-					}
-				}
-			}
-			obj_size=sizes[Nd];
-			//if( (obj_size*hdf5_float_size)%sizeof(T) != 0 ){
-			//	HDF5_error_exit("HDF5Reader::read: error size of input vectors differ from those in record!");
-			//}
-			//this calculation is build on top of field float size since it involves type T, which is based on the same base prec.
-			ullong arr_size=(obj_size*field_float_size)/sizeof(T);
-			obj_size/=arr_size;
-			if(profile) swatch_datatypes.stop();
-
-			//determine local sizes, allocate memory and read
-			if(profile) swatch_read.start();
-			const int mynode=Layout::nodeNumber();
-			const int nodeSites = Layout::sitesOnNode();
-			size_t tot_size = obj_size*arr_size*nodeSites;
-			char* buf = new(std::nothrow) char[tot_size*hdf5_float_size];
-			if( buf == 0x0 ) {
-				HDF5_error_exit("Unable to allocate buf!");
-			}
-			readLattice(name,type_id,type_id,obj_size*arr_size,tot_size,buf,invert_order);
-			H5Tclose(type_id);
-			if(profile) swatch_read.stop();
-
-			//put lattice into u-field and reconstruct as well as reorder them on the fly:
-			// Reconstruct the gauge field
-			if(profile) swatch_reorder.start();
-			fieldarray.resize(arr_size);
-			/*#pragma omp parallel for firstprivate(nodeSites,arr_size,obj_size,float_size) shared(buf,fieldarray)
-			for(unsigned int run=0; run<nodeSites; run++){
-			for(unsigned int dd=0; dd<arr_size; dd++){
-			memcpy(&(fieldarray[dd].elem(reordermap[run])),reinterpret_cast<char*>(buf+(dd+arr_size*run)*obj_size),float_size*obj_size);
-			}
-			}*/
-			if(hdf5_float_size==field_float_size){
-				//convert layout directly
-				CvtToLayout(fieldarray,reinterpret_cast<void*>(buf),nodeSites,arr_size,sizeof(T));
-			}
-			else{
-				//convert precision first
-				wtd* tmpbuf=new wtd[tot_size];
-				for(unsigned int i=0; i<tot_size; i++){
-					if(hdf5_float_size==4){
-						REAL32 tmpfloat;
-						memcpy(&tmpfloat,&buf[i*hdf5_float_size],hdf5_float_size);
-						tmpbuf[i]=static_cast< wtd >(tmpfloat);
-					}
-					else{
-						REAL64 tmpfloat;
-						memcpy(&tmpfloat,&buf[i*hdf5_float_size],hdf5_float_size);
-						tmpbuf[i]=static_cast< wtd >(tmpfloat);
-					}
-				}
-				CvtToLayout(fieldarray,reinterpret_cast<void*>(tmpbuf),nodeSites,arr_size,sizeof(T));
-				delete [] tmpbuf;
-			}
-			delete [] buf;
-			if(profile) swatch_reorder.stop();
-			
-			if(profile){
-				QDPIO::cout << "HDF5-I/O statistics. Read:" << std::endl;
-				QDPIO::cout << "\t preparing: " << swatch_prepare.getTimeInSeconds() << " s." << std::endl;
-				QDPIO::cout << "\t datatype-handling: " << swatch_datatypes.getTimeInSeconds() << " s." << std::endl;
-				QDPIO::cout << "\t reordering: " << swatch_reorder.getTimeInSeconds() << " s." << std::endl;
-				QDPIO::cout << "\t read: " << swatch_read.getTimeInSeconds() << " s." << std::endl;
-				QDPIO::cout << "\t MB read: " << static_cast<int>(Layout::vol()*fieldarray.size()*obj_size*hdf5_float_size)/1024/1024 << std::endl;
-			}
+	      }
+	    }
+	    else{
+	      for(unsigned int dd=0; dd<Nd; dd++){
+		if(sizes[dd]!=Layout::lattSize()[dd]){
+		  HDF5_error_exit("HDF5Reader::read: mismatching lattice extents.");
 		}
+	      }
+	    }
+	    obj_size=sizes[Nd];
+	    //if( (obj_size*hdf5_float_size) != sizeof(T) ){
+	    //	HDF5_error_exit("HDF5Reader::read: error size of input vectors differ from those in record!");
+	    //}
+	    if(profile) swatch_datatypes.stop();
 
-		//special file formats
-		//Qlua
-		void readQlua(const std::string& name, multi1d<LatticeColorMatrixD3>& field);
-		void readQlua(const std::string& name, LatticeDiracPropagatorD3& prop);
+	    //determine local sizes, allocate memory and read
+	    if(profile) swatch_read.start();
+	    const int nodeSites = Layout::sitesOnNode();
+	    size_t tot_size = obj_size*nodeSites;
+	    char* buf = new(std::nothrow) char[tot_size*hdf5_float_size];
+	    if( buf == 0x0 ) {
+	      HDF5_error_exit("Unable to allocate buf\n");
+	    }
+	    readLattice(name,type_id,type_id,obj_size,tot_size,buf,invert_order);
+	    H5Tclose(type_id);
+	    if(profile) swatch_read.stop();
+
+	    //put lattice into u-field and reconstruct as well as reorder them on the fly:
+	    // Reconstruct the gauge field
+	    if(profile) swatch_reorder.start();
+	    if(hdf5_float_size==field_float_size){
+	      //convert layout directly
+	      CvtToLayout(field,reinterpret_cast<void*>(buf),nodeSites,sizeof(T));
+	    }
+	    else{
+	      //convert precision first
+	      wtd* tmpbuf=new wtd[tot_size];
+	      for(unsigned int i=0; i<tot_size; i++){
+		if(hdf5_float_size==4){
+		  REAL32 tmpfloat;
+		  memcpy(&tmpfloat,&buf[i*hdf5_float_size],hdf5_float_size);
+		  tmpbuf[i]=static_cast< wtd >(tmpfloat);
+		}
+		else{
+		  REAL64 tmpfloat;
+		  memcpy(&tmpfloat,&buf[i*hdf5_float_size],hdf5_float_size);
+		  tmpbuf[i]=static_cast< wtd >(tmpfloat);
+		}
+	      }
+	      CvtToLayout(field,reinterpret_cast<void*>(tmpbuf),nodeSites,sizeof(T));
+	      delete [] tmpbuf;
+	    }
+	    delete [] buf;
+	    if(profile) swatch_reorder.stop();
+			
+	    if(profile){
+	      QDPIO::cout << "HDF5-I/O statistics. Read:" << std::endl;
+	      QDPIO::cout << "\t preparing: " << swatch_prepare.getTimeInSeconds() << std::endl;
+	      QDPIO::cout << "\t datatype-handling: " << swatch_datatypes.getTimeInSeconds() << std::endl;
+	      QDPIO::cout << "\t reordering: " << swatch_reorder.getTimeInSeconds() << std::endl;
+	      QDPIO::cout << "\t read: " << swatch_read.getTimeInSeconds() << std::endl;
+	      QDPIO::cout << "\t MB read: " << static_cast<int>(Layout::vol()*obj_size*hdf5_float_size)/1024/1024 << std::endl;
+	    }
+	  }
+
+	  //read multi1d<OLattice> object: 
+	  template<class T>
+	  void read(const std::string& name, multi1d< OLattice<T> >& fieldarray, const HDF5Base::accessmode& accmode=HDF5Base::transpose_order)
+	  {
+	    StopWatch swatch_datatypes, swatch_prepare, swatch_reorder, swatch_read;
+			
+	    //define a new type
+	    typedef typename WordType<T>::Type_t wtd;
+			
+	    bool invert_order;
+	    switch(accmode){
+	    case HDF5Base::transpose_order:
+	      invert_order=true;
+	      break;
+	    case HDF5Base::maintain_order:
+	      invert_order=false;
+	      break;
+	    }
+			
+	    //read dataset extents:
+	    if(profile) swatch_prepare.start();
+	    multi1d<ullong> sizes;
+	    ullong obj_size=0;
+	    hid_t type_id;
+	    readPrepareLattice(name,type_id,sizes);
+	    swatch_prepare.stop();
+
+	    //check sanity
+	    if(profile) swatch_datatypes.start();
+	    ullong hdf5_float_size=H5Tget_size(type_id);
+	    ullong field_float_size=sizeof(wtd);
+			
+	    //checks
+	    if( hdf5_float_size!=4 && hdf5_float_size!=8 ){
+	      HDF5_error_exit("HDF5Reader::read: error, datatype mismatch. The datatype should be either 32 or 64 bit!\n");
+	    }
+	    if(sizes.size()!=(Nd+1)){
+	      HDF5_error_exit("HDF5Reader::read: error, wrong dimensionality!");
+	    }
+	    if(invert_order){
+	      for(unsigned int dd=0; dd<Nd; dd++){
+		if(sizes[Nd-dd-1]!=Layout::lattSize()[dd]){
+		  HDF5_error_exit("HDF5Reader::read: mismatching lattice extents.");
+		}
+	      }
+	    }
+	    else{
+	      for(unsigned int dd=0; dd<Nd; dd++){
+		if(sizes[dd]!=Layout::lattSize()[dd]){
+		  HDF5_error_exit("HDF5Reader::read: mismatching lattice extents.");
+		}
+	      }
+	    }
+	    obj_size=sizes[Nd];
+	    //if( (obj_size*hdf5_float_size)%sizeof(T) != 0 ){
+	    //	HDF5_error_exit("HDF5Reader::read: error size of input vectors differ from those in record!");
+	    //}
+	    //this calculation is build on top of field float size since it involves type T, which is based on the same base prec.
+	    ullong arr_size=(obj_size*field_float_size)/sizeof(T);
+	    obj_size/=arr_size;
+	    if(profile) swatch_datatypes.stop();
+
+	    //determine local sizes, allocate memory and read
+	    if(profile) swatch_read.start();
+	    const int nodeSites = Layout::sitesOnNode();
+	    size_t tot_size = obj_size*arr_size*nodeSites;
+	    char* buf = new(std::nothrow) char[tot_size*hdf5_float_size];
+	    if( buf == 0x0 ) {
+	      HDF5_error_exit("Unable to allocate buf!");
+	    }
+	    readLattice(name,type_id,type_id,obj_size*arr_size,tot_size,buf,invert_order);
+	    H5Tclose(type_id);
+	    if(profile) swatch_read.stop();
+
+	    //put lattice into u-field and reconstruct as well as reorder them on the fly:
+	    // Reconstruct the gauge field
+	    if(profile) swatch_reorder.start();
+	    fieldarray.resize(arr_size);
+	    /*#pragma omp parallel for firstprivate(nodeSites,arr_size,obj_size,float_size) shared(buf,fieldarray)
+	      for(unsigned int run=0; run<nodeSites; run++){
+	      for(unsigned int dd=0; dd<arr_size; dd++){
+	      memcpy(&(fieldarray[dd].elem(reordermap[run])),reinterpret_cast<char*>(buf+(dd+arr_size*run)*obj_size),float_size*obj_size);
+	      }
+	      }*/
+	    if(hdf5_float_size==field_float_size){
+	      //convert layout directly
+	      CvtToLayout(fieldarray,reinterpret_cast<void*>(buf),nodeSites,arr_size,sizeof(T));
+	    }
+	    else{
+	      //convert precision first
+	      wtd* tmpbuf=new wtd[tot_size];
+	      for(unsigned int i=0; i<tot_size; i++){
+		if(hdf5_float_size==4){
+		  REAL32 tmpfloat;
+		  memcpy(&tmpfloat,&buf[i*hdf5_float_size],hdf5_float_size);
+		  tmpbuf[i]=static_cast< wtd >(tmpfloat);
+		}
+		else{
+		  REAL64 tmpfloat;
+		  memcpy(&tmpfloat,&buf[i*hdf5_float_size],hdf5_float_size);
+		  tmpbuf[i]=static_cast< wtd >(tmpfloat);
+		}
+	      }
+	      CvtToLayout(fieldarray,reinterpret_cast<void*>(tmpbuf),nodeSites,arr_size,sizeof(T));
+	      delete [] tmpbuf;
+	    }
+	    delete [] buf;
+	    if(profile) swatch_reorder.stop();
+			
+	    if(profile){
+	      QDPIO::cout << "HDF5-I/O statistics. Read:" << std::endl;
+	      QDPIO::cout << "\t preparing: " << swatch_prepare.getTimeInSeconds() << " s." << std::endl;
+	      QDPIO::cout << "\t datatype-handling: " << swatch_datatypes.getTimeInSeconds() << " s." << std::endl;
+	      QDPIO::cout << "\t reordering: " << swatch_reorder.getTimeInSeconds() << " s." << std::endl;
+	      QDPIO::cout << "\t read: " << swatch_read.getTimeInSeconds() << " s." << std::endl;
+	      QDPIO::cout << "\t MB read: " << static_cast<int>(Layout::vol()*fieldarray.size()*obj_size*hdf5_float_size)/1024/1024 << std::endl;
+	    }
+	  }
+
+	  //special file formats
+	  //Qlua
+	  void readQlua(const std::string& name, multi1d<LatticeColorMatrixD3>& field);
+	  void readQlua(const std::string& name, LatticeDiracPropagatorD3& prop);
     
 	};
 
-	template<typename ctype>
-	bool get_global(ctype& global, const ctype& local);
+  template<typename ctype>
+  bool get_global(ctype& global, const ctype& local);
 
-	template<typename ctype>
-	bool get_global(multi1d<ctype>& global, const multi1d<ctype>& local);
+  template<typename ctype>
+  bool get_global(multi1d<ctype>& global, const multi1d<ctype>& local);
 
-	template<typename ctype>
-	inline bool is_global(const ctype l)
-	{
-		ctype g;
-		return get_global(g,l);
-	}
+  template<typename ctype>
+  inline bool is_global(const ctype l)
+  {
+    ctype g;
+    return get_global(g,l);
+  }
 
-	template <typename ctype>
-	inline void assert_global_size(const multi1d<ctype>& datum)
-	{
-		if (not is_global(datum.size()))
-			QDP_error_exit("qdp_hdf5.h  assert_global_size: multi1d.size not global!");
-	}
+  template <typename ctype>
+  inline void assert_global_size(const multi1d<ctype>& datum)
+  {
+    if (not is_global(datum.size()))
+      QDP_error_exit("qdp_hdf5.h  assert_global_size: multi1d.size not global!");
+  }
 
-	template <typename ctype>
-	inline void assert_global_size(const multi2d<ctype>& datum)
-	{
-		if (not is_global(datum.size2()))
-			QDP_error_exit("qdp_hdf5.h  assert_global_size: multi2d.size2 not global!");
+  template <typename ctype>
+  inline void assert_global_size(const multi2d<ctype>& datum)
+  {
+    if (not is_global(datum.size2()))
+      QDP_error_exit("qdp_hdf5.h  assert_global_size: multi2d.size2 not global!");
 
-		if (not is_global(datum.size1()))
-			QDP_error_exit("qdp_hdf5.h  assert_global_size: multi2d.size1 not global!");
-	}
+    if (not is_global(datum.size1()))
+      QDP_error_exit("qdp_hdf5.h  assert_global_size: multi2d.size1 not global!");
+  }
 
-	//template specializations:
-	//complex types
-	//single datum
-	template<>void HDF5::read< PScalar< PScalar< RComplex<float> > > >(const std::string& dataname, ComplexF& datum);
-	template<>void HDF5::read< PScalar< PScalar< RComplex<double> > > >(const std::string& dataname, ComplexD& datum);
+  //template specializations:
+  //complex types
+  //single datum
+  template<>void HDF5::read< PScalar< PScalar< RComplex<float> > > >(const std::string& dataname, ComplexF& datum);
+  template<>void HDF5::read< PScalar< PScalar< RComplex<double> > > >(const std::string& dataname, ComplexD& datum);
 
-	//array value
-	template<>void HDF5::read< PScalar< PScalar< RComplex<float> > > >(const std::string& dataname, multi1d<ComplexF>& datum);
-	template<>void HDF5::read< PScalar< PScalar< RComplex<double> > > >(const std::string& dataname, multi1d<ComplexD>& datum);
+  //array value
+  template<>void HDF5::read< PScalar< PScalar< RComplex<float> > > >(const std::string& dataname, multi1d<ComplexF>& datum);
+  template<>void HDF5::read< PScalar< PScalar< RComplex<double> > > >(const std::string& dataname, multi1d<ComplexD>& datum);
 
-	//specializations for Lattice objects
-	template<>void HDF5::read< PScalar< PColorMatrix< RComplex<REAL64>, 3> > >(const std::string& name, 
-																				LatticeColorMatrixD3& field, 
-																				const HDF5Base::accessmode& accmode);
+  //specializations for Lattice objects
+  template<>void HDF5::read< PScalar< PColorMatrix< RComplex<REAL64>, 3> > >(const std::string& name, 
+									     LatticeColorMatrixD3& field, 
+									     const HDF5Base::accessmode& accmode);
 	
-	template<>void HDF5::read< PSpinMatrix< PColorMatrix< RComplex<REAL32>, 3>, 4> >(const std::string& name, 
-																				LatticeDiracPropagatorF3& field, 
-																				const HDF5Base::accessmode& accmode);
+  template<>void HDF5::read< PSpinMatrix< PColorMatrix< RComplex<REAL32>, 3>, 4> >(const std::string& name, 
+										   LatticeDiracPropagatorF3& field, 
+										   const HDF5Base::accessmode& accmode);
 																				
-	template<>void HDF5::read< PSpinMatrix< PColorMatrix< RComplex<REAL64>, 3>, 4> >(const std::string& name, 
-																					LatticeDiracPropagatorD3& field, 
-																					const HDF5Base::accessmode& accmode);
+  template<>void HDF5::read< PSpinMatrix< PColorMatrix< RComplex<REAL64>, 3>, 4> >(const std::string& name, 
+										   LatticeDiracPropagatorD3& field, 
+										   const HDF5Base::accessmode& accmode);
 	
 	//specializations for multi1d<OLattice> objects
 	template<>void HDF5::read< PScalar< PColorMatrix< RComplex<REAL64>, 3> > >(const std::string& name, 
@@ -985,8 +941,7 @@ namespace QDP {
 			//first, check if type is already committed:
 			htri_t iscommitted=H5Tcommitted(dtype_id);
 			if(iscommitted==0){
-				//not commit, commit type:
-				herr_t errhandle=H5Tcommit(file_id,name.c_str(),dtype_id,H5P_DEFAULT,H5P_DEFAULT,H5P_DEFAULT);
+			  H5Tcommit(file_id,name.c_str(),dtype_id,H5P_DEFAULT,H5P_DEFAULT,H5P_DEFAULT);
 			}
 		}
 
@@ -1019,7 +974,7 @@ namespace QDP {
 				if(!(mode&HDF5Base::trunc)){
 					HDF5_error_exit("HDF5Writer::writeAttribute: error, attribute "+aname+" already exists!");
 				}
-				herr_t errhandle=H5Adelete_by_name(current_group,oname.c_str(),aname.c_str(),H5P_DEFAULT);
+				H5Adelete_by_name(current_group,oname.c_str(),aname.c_str(),H5P_DEFAULT);
 			}
 
 			hid_t attr_space_id=H5Screate(H5S_SCALAR);
@@ -1050,7 +1005,7 @@ namespace QDP {
 				if(!(mode&HDF5Base::trunc)){
 					HDF5_error_exit("HDF5Writer::writeAttribute: error, attribute "+aname+" already exists!");
 				}
-				herr_t errhandle=H5Adelete_by_name(current_group,oname.c_str(),aname.c_str(),H5P_DEFAULT);
+				H5Adelete_by_name(current_group,oname.c_str(),aname.c_str(),H5P_DEFAULT);
 			}
 
 			hsize_t dimcount=datum_0.size();
@@ -1088,11 +1043,11 @@ namespace QDP {
 					HDF5_error_exit("HDF5Writer::write: error, dataset already exists and you specified not to overwrite!\n");
 				}
 				H5O_info_t objinfo;
-				herr_t errhandle=H5Oget_info_by_name(current_group,dname.c_str(),&objinfo,H5P_DEFAULT);
+				H5Oget_info_by_name(current_group,dname.c_str(),&objinfo,H5P_DEFAULT);
 				if(objinfo.type!=H5O_TYPE_DATASET){
 					HDF5_error_exit("HDF5Writer::write: error, object you try to write does already exist and is of different type!");
 				}
-				errhandle=H5Ldelete(current_group,dname.c_str(),H5P_DEFAULT);
+				H5Ldelete(current_group,dname.c_str(),H5P_DEFAULT);
 			}
        
 			spaceid=H5Screate(H5S_SCALAR);
@@ -1121,17 +1076,17 @@ namespace QDP {
 					HDF5_error_exit("HDF5Writer::write: error, object named "+dname+" already exists and you specified not to overwrite it!");
 				}
 				H5O_info_t objinfo;
-				herr_t errhandle=H5Oget_info_by_name(current_group,dname.c_str(),&objinfo,H5P_DEFAULT);
+				H5Oget_info_by_name(current_group,dname.c_str(),&objinfo,H5P_DEFAULT);
 				if(objinfo.type!=H5O_TYPE_DATASET){
 					HDF5_error_exit("HDF5Writer::write: error, object you try to write does already exist and is of different type!");
 				}
-				errhandle=H5Ldelete(current_group,dname.c_str(),H5P_DEFAULT);
+				H5Ldelete(current_group,dname.c_str(),H5P_DEFAULT);
 			}
        
 			spaceid=H5Screate(H5S_SIMPLE);
 			hsize_t size[1];
 			size[0]=static_cast<hsize_t>(datum.size());
-			herr_t errhandle=H5Sset_extent_simple(spaceid,1,size,size);
+			H5Sset_extent_simple(spaceid,1,size,size);
 			dataid=H5Dcreate(current_group,dname.c_str(),hdftype,spaceid,H5P_DEFAULT,H5P_DEFAULT,H5P_DEFAULT);
 			H5Sclose(spaceid);
 
@@ -1143,7 +1098,7 @@ namespace QDP {
 				ctype* datumcpy=new(std::nothrow) ctype[datum.size()];
 
 				if ( datumcpy != 0x0 ) {
-					for(ullong i=0; i<datum.size(); i++)
+					for(int i=0; i<datum.size(); i++)
 						datumcpy[i]=datum[i];
 
 					status = H5Dwrite(dataid,hdftype,H5S_ALL,H5S_ALL,plist_id,static_cast<void*>(datumcpy));
@@ -1176,11 +1131,11 @@ namespace QDP {
 					HDF5_error_exit("HDF5Writer::write: error, object named "+dname+" already exists and you specified not to overwrite it!");
 				}
 				H5O_info_t objinfo;
-				herr_t errhandle=H5Oget_info_by_name(current_group,dname.c_str(),&objinfo,H5P_DEFAULT);
+				H5Oget_info_by_name(current_group,dname.c_str(),&objinfo,H5P_DEFAULT);
 				if(objinfo.type!=H5O_TYPE_DATASET){
 					HDF5_error_exit("HDF5Writer::write: error, object you try to write does already exist and is of different type!");
 				}
-				errhandle=H5Ldelete(current_group,dname.c_str(),H5P_DEFAULT);
+				H5Ldelete(current_group,dname.c_str(),H5P_DEFAULT);
 			}
        
 			//create dataspace and dataset: 
@@ -1367,17 +1322,12 @@ namespace QDP {
 
 			//get node information:
 			if(profile) swatch_reorder.start();
-			const int mynode=Layout::nodeNumber();
 			const int nodeSites = Layout::sitesOnNode();
 
 			//copy buffer into data
 			size_t float_size=sizeof(REAL);
 			size_t obj_size=sizeof(T)/float_size;
 			REAL* buf=new REAL[nodeSites*obj_size];
-			/*#pragma omp parallel for firstprivate(nodeSites,obj_size,float_size) shared(buf,field)
-			for(unsigned int run=0; run<nodeSites; run++){
-			memcpy(reinterpret_cast<char*>(buf+run*obj_size),&(field.elem(reordermap[run])),float_size*obj_size);
-			}*/
 			CvtToHost(reinterpret_cast<void*>(buf),field,nodeSites,float_size*obj_size);
 			if(profile) swatch_reorder.stop();
 
@@ -1423,7 +1373,6 @@ namespace QDP {
 	  
 			//get node information:
 			if(profile) swatch_reorder.start();
-			const int mynode=Layout::nodeNumber();
 			const int nodeSites = Layout::sitesOnNode();
 
 			//copy buffer into data
@@ -1431,12 +1380,6 @@ namespace QDP {
 			size_t obj_size=sizeof(T)/float_size;
 			size_t arr_size=fieldarray.size();
 			REAL* buf=new REAL[nodeSites*obj_size*arr_size];
-			/*#pragma omp parallel for firstprivate(nodeSites,arr_size,obj_size,float_size) shared(buf,fieldarray)
-			for(unsigned int run=0; run<nodeSites; run++){
-			for(unsigned int dd=0; dd<arr_size; dd++){
-			memcpy(reinterpret_cast<char*>(buf+(dd+arr_size*run)*obj_size),&(fieldarray[dd].elem(reordermap[run])),float_size*obj_size);
-			}
-			}*/
 			CvtToHost(reinterpret_cast<void*>(buf),fieldarray,nodeSites,arr_size,float_size*obj_size);
 
 			hid_t type_id;

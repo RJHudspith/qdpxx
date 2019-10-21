@@ -123,7 +123,7 @@ struct Zero {};
 
 //! Put zero in some unnamed space
 namespace {
- Zero zero;
+  const Zero zero;
 }
 
 } // namespace QDP

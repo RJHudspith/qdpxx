@@ -330,13 +330,6 @@ namespace QDP
       error_message << "Error in reading array " << s << std::endl;
       throw error_message.str();
     }
-
-    // It is not an error to have a zero-length array
-    //  if (array_size == 0)
-    //  {
-    //    error_message << "Something wrong with reading array " << list_string << std::endl;
-    //    throw error_message.str();
-    //  }
       
     // Now resize the array to hold the no of elements.
     result.resize(array_size);
@@ -346,7 +339,7 @@ namespace QDP
     //  list_stream.str(list_string);
     std::istringstream list_stream2(list_string);
 
-    for(int i=0; i < result.size(); i++) 
+    for( int i=0; i < result.size(); i++) 
     {
       // read the element.
       list_stream2 >> dummy;
@@ -453,7 +446,7 @@ namespace QDP
     //  list_stream.str(list_string);
     std::istringstream list_stream2(list_string);
 
-    for(int i=0; i < result.size(); i++) 
+    for( size_t i=0; i < result.size(); i++) 
     {
       // read the element.
       list_stream2 >> result[i];
@@ -875,7 +868,7 @@ namespace QDP
     if (s1.size() > 0)
     {
       output << s1[0];
-      for(int index=1; index < s1.size(); index++) 
+      for( int index=1; index < s1.size(); index++) 
 	output << " " << s1[index];
     }
     
@@ -925,8 +918,9 @@ namespace QDP
     if (s1.size() > 0)
     {
       output << s1[0];
-      for(int index=1; index < s1.size(); index++) 
+      for( int index=1; index < s1.size(); index++) {
 	output << " " << s1[index];
+      }
     }
     
     // Write the array - do not use a normal string write
@@ -943,7 +937,7 @@ namespace QDP
     if (s1.size() > 0)
     {
       output << s1[0];
-      for(int index=1; index < s1.size(); index++) 
+      for( int index=1; index < s1.size(); index++) 
 	output << " " << s1[index];
     }
     
@@ -971,7 +965,7 @@ namespace QDP
     if (s1.size() > 0)
     {
       output << s1[0];
-      for(int index=1; index < s1.size(); index++) 
+      for( int index=1; index < s1.size(); index++) 
 	output << " " << s1[index];
     }
     
@@ -989,7 +983,7 @@ namespace QDP
     if (s1.size() > 0)
     {
       output << s1[0];
-      for(int index=1; index < s1.size(); index++) 
+      for( int index=1; index < s1.size(); index++) 
 	output << " " << s1[index];
     }
     
@@ -1014,7 +1008,7 @@ namespace QDP
     if (s1.size() > 0)
     {
       output << s1[0];
-      for(unsigned index=1; index < s1.size(); index++) 
+      for( size_t index=1; index < s1.size(); index++) 
 	output << " " << s1[index];
     }
     
@@ -1058,7 +1052,7 @@ namespace QDP
     if (s1.size() > 0)
     {
       output << s1[0];
-      for(int index=1; index < s1.size(); index++) 
+      for( size_t index=1; index < s1.size(); index++) 
 	output << " " << s1[index];
     }
     
@@ -1076,7 +1070,7 @@ namespace QDP
     if (s1.size() > 0)
     {
       output << s1[0];
-      for(int index=1; index < s1.size(); index++) 
+      for( size_t index=1; index < s1.size(); index++) 
 	output << " " << s1[index];
     }
     
@@ -1103,7 +1097,7 @@ namespace QDP
     if (s1.size() > 0)
     {
       output << s1[0];
-      for(int index=1; index < s1.size(); index++) 
+      for( size_t index=1; index < s1.size(); index++) 
 	output << " " << s1[index];
     }
     
@@ -1121,7 +1115,7 @@ namespace QDP
     if (s1.size() > 0)
     {
       output << s1[0];
-      for(int index=1; index < s1.size(); index++) 
+      for( size_t index=1; index < s1.size(); index++) 
 	output << " " << s1[index];
     }
     

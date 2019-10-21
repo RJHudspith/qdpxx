@@ -12,35 +12,20 @@ namespace QDP {
 
 void vaypx4(REAL64 *Out,REAL64 *scalep,REAL64 *InScale, int n_4spin)
 {
-  __m128d scalar;
-  __m128d tmp1;
-  __m128d tmp2;
-  __m128d tmp3;
-   __m128d in1;
-  __m128d add1;
-  __m128d in2;
-  __m128d add2;
-  __m128d in3;
-  __m128d add3;
-  __m128d in4;
-  __m128d add4;
-  __m128d out1;
-  __m128d out2;
-  __m128d out3;
-
   // Load the scalar into low bytes of scalar
-  scalar = _mm_load_sd(scalep);
+  __m128d scalar = _mm_load_sd(scalep);
   
   // cross components into tmp 
-  // Zero tmp
-  tmp1 = _mm_setzero_pd();
-  tmp1 = _mm_shuffle_pd(scalar, scalar, 0x1);
+  __m128d tmp1 = _mm_shuffle_pd(scalar, scalar, 0x1);
   scalar = _mm_add_pd(scalar, tmp1);
 
   double *in_p=InScale;
   double *out_p=Out;
 
- 
+  __m128d in1;
+  __m128d add1;
+  __m128d out1;
+  
   // We are dealing with n_4 spin 4spinor. 
   // 4 spinors 
 
@@ -53,9 +38,6 @@ void vaypx4(REAL64 *Out,REAL64 *scalep,REAL64 *InScale, int n_4spin)
 
   }
 }
-
-
-
 
 } // namespace QDP;
 

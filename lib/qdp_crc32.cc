@@ -163,17 +163,6 @@ namespace QDPUtil
   };
 #endif
 
-/* =========================================================================
- * This function can be used by asm versions of crc32()
- */
-  static uLongf *get_crc_table()
-  {
-#ifdef DYNAMIC_CRC_TABLE
-    if (crc_table_empty) make_crc_table();
-#endif
-    return (uLongf *)crc_table;
-  }
-
 /* ========================================================================= */
 #define DO1(buf) crc = crc_table[((int)crc ^ (*buf++)) & 0xff] ^ (crc >> 8);
 #define DO2(buf)  DO1(buf); DO1(buf);

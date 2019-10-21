@@ -71,33 +71,23 @@ QDPXX_MESSAGE("Using SSE3")
     t1= _mm_shuffle_pd(t1,t2,0x2);		\
     (z) = _mm_add_pd((z),t1);			\
   }
-
-
-
 #endif
 
 
-  /* M3 = M1*adj(M2) */
+// M3 = M1*adj(M2)
   void ssed_m_eq_mh_u(REAL64* m3, REAL64* m2, REAL64* m1, int n_mat)
   {
     __m128d m1_1;
     __m128d m1_2;
     __m128d m1_3;
-
     __m128d m2_1;
     __m128d m2_2;
     __m128d m2_3;
-
     __m128d m3_11;
-    __m128d m3_12;
-    __m128d m3_13;
-
 
     REAL64* m1_p=m1;
     REAL64* m2_p=m2;
     REAL64* m3_p=m3;
-
-
 
     for(int i=0; i < n_mat; i++) { 
 
@@ -215,48 +205,36 @@ QDPXX_MESSAGE("Using SSE3")
       CONJMADD(m3_11, m2_3, m1_3);
 
       _mm_storeu_pd(m3_p+16, m3_11);
-
-
-
-      /* Next matrix */
+      
+      // Next matrix
       m1_p += 18; m2_p += 18; m3_p += 18;
-
-
     }
-
   }
 
-  /* M3 += a M1*M2 */
+  // M3 += a M1*M2
   void ssed_m_peq_amh_u(REAL64* m3, REAL64* a, REAL64* m2, REAL64* m1, int n_mat)
   {
-    __m128d m1_1;
-    __m128d m1_2;
-    __m128d m1_3;
-
-    __m128d m2_1;
-    __m128d m2_2;
-    __m128d m2_3;
-
-    __m128d m3_11;
-    __m128d tmp1;
-    __m128d tmp2;
-
-    __m128d scalar;
-    
-  
     // cross components into tmp 
     // Zero tmp
-    scalar = _mm_load_sd(a);
-    tmp1 = _mm_setzero_pd();
-    tmp1 = _mm_shuffle_pd(scalar, scalar, 0x1);
+    __m128d scalar = _mm_load_sd(a);
+    __m128d tmp1 = _mm_shuffle_pd(scalar, scalar, 0x1);
     scalar = _mm_add_pd(scalar, tmp1);
 
     REAL64* m1_p=m1;
     REAL64* m2_p=m2;
     REAL64* m3_p=m3;
 
+    __m128d tmp2 ;
+    __m128d m1_1;
+    __m128d m1_2;
+    __m128d m1_3;
+    __m128d m2_1;
+    __m128d m2_2;
+    __m128d m2_3;
+    __m128d m3_11;
+    
     for(int i =0; i < n_mat; i++) { 
-      /* Next matrix */
+      // Next Matrix
       m2_1 = _mm_loadu_pd(m2_p);
       m2_1 = _mm_mul_pd(scalar, m2_1);
 
@@ -265,7 +243,6 @@ QDPXX_MESSAGE("Using SSE3")
 
       m2_3 = _mm_loadu_pd(m2_p+4);
       m2_3 = _mm_mul_pd(scalar, m2_3);
-
 
       tmp1 = _mm_loadu_pd(m3_p);
       m1_1 = _mm_loadu_pd(m1_p);      
@@ -400,45 +377,32 @@ QDPXX_MESSAGE("Using SSE3")
       _mm_storeu_pd(m3_p+16, tmp1);
 
       m1_p += 18; m2_p += 18; m3_p += 18;
-
     }
-    
-
-
   }
 
 
   // ALIGNED
-
-  /* M3 = M1*adj(M2) */
+  // M3 = M1*adj(M2)
   void ssed_m_eq_mh(REAL64* m3, REAL64* m2, REAL64* m1, int n_mat)
   {
     __m128d m1_1;
     __m128d m1_2;
     __m128d m1_3;
-
     __m128d m2_1;
     __m128d m2_2;
     __m128d m2_3;
-
     __m128d m3_11;
-    __m128d m3_12;
-    __m128d m3_13;
-
 
     REAL64* m1_p=m1;
     REAL64* m2_p=m2;
     REAL64* m3_p=m3;
-
-
 
     for(int i=0; i < n_mat; i++) { 
 
       m2_1 = _mm_load_pd(m2_p);
       m2_2 = _mm_load_pd(m2_p+2);
       m2_3 = _mm_load_pd(m2_p+4);
-
-
+      
       m1_1 = _mm_load_pd(m1_p);      
       m1_2 = _mm_load_pd(m1_p+2);
       m1_3 = _mm_load_pd(m1_p+4);
@@ -454,7 +418,6 @@ QDPXX_MESSAGE("Using SSE3")
 
       _mm_store_pd(m3_p, m3_11);
 
-
       CONJMUL(m3_11, m2_1, m1_1);
       m1_1 = _mm_load_pd(m1_p+12);
 
@@ -466,7 +429,6 @@ QDPXX_MESSAGE("Using SSE3")
 
       _mm_store_pd(m3_p+2, m3_11);
 
-
       CONJMUL(m3_11, m2_1, m1_1);
       m2_1 = _mm_load_pd(m2_p+6);
       CONJMADD(m3_11, m2_2, m1_2);
@@ -475,7 +437,6 @@ QDPXX_MESSAGE("Using SSE3")
       m2_3 = _mm_load_pd(m2_p+10);
 
       _mm_store_pd(m3_p+4, m3_11);
-
 
       m1_1 = _mm_load_pd(m1_p);      
       m1_2 = _mm_load_pd(m1_p+2);
@@ -492,7 +453,6 @@ QDPXX_MESSAGE("Using SSE3")
 
       _mm_store_pd(m3_p+6, m3_11);
 
-
       CONJMUL(m3_11, m2_1, m1_1);
       m1_1 = _mm_load_pd(m1_p+12);
 
@@ -504,7 +464,6 @@ QDPXX_MESSAGE("Using SSE3")
 
       _mm_store_pd(m3_p+8, m3_11);
 
-
       CONJMUL(m3_11, m2_1, m1_1);
       m2_1 = _mm_load_pd(m2_p+12);
       CONJMADD(m3_11, m2_2, m1_2);
@@ -513,7 +472,6 @@ QDPXX_MESSAGE("Using SSE3")
       m2_3 = _mm_load_pd(m2_p+16);
 
       _mm_store_pd(m3_p+10, m3_11);
-
 
       m1_1 = _mm_load_pd(m1_p);      
       m1_2 = _mm_load_pd(m1_p+2);
@@ -530,7 +488,6 @@ QDPXX_MESSAGE("Using SSE3")
 
       _mm_store_pd(m3_p+12, m3_11);
 
-
       CONJMUL(m3_11, m2_1, m1_1);
       m1_1 = _mm_load_pd(m1_p+12);
 
@@ -542,54 +499,39 @@ QDPXX_MESSAGE("Using SSE3")
 
       _mm_store_pd(m3_p+14, m3_11);
 
-
       CONJMUL(m3_11, m2_1, m1_1);
       CONJMADD(m3_11, m2_2, m1_2);
       CONJMADD(m3_11, m2_3, m1_3);
 
       _mm_store_pd(m3_p+16, m3_11);
-
-
-
-      /* Next matrix */
+      
+      // Next matrix
       m1_p += 18; m2_p += 18; m3_p += 18;
-
-
     }
-
   }
 
-  /* M3 += a M1*M2 */
+  // M3 += a M1*M2
   void ssed_m_peq_amh(REAL64* m3, REAL64* a, REAL64* m2, REAL64* m1, int n_mat)
-  {
-    __m128d m1_1;
-    __m128d m1_2;
-    __m128d m1_3;
-
-    __m128d m2_1;
-    __m128d m2_2;
-    __m128d m2_3;
-
-    __m128d m3_11;
-    __m128d tmp1;
-    __m128d tmp2;
-
-    __m128d scalar;
-    
-  
+  {   
     // cross components into tmp 
-    // Zero tmp
-    scalar = _mm_load_sd(a);
-    tmp1 = _mm_setzero_pd();
-    tmp1 = _mm_shuffle_pd(scalar, scalar, 0x1);
+    __m128d scalar = _mm_load_sd(a);
+    __m128d tmp1 = _mm_shuffle_pd(scalar, scalar, 0x1);
     scalar = _mm_add_pd(scalar, tmp1);
 
     REAL64* m1_p=m1;
     REAL64* m2_p=m2;
     REAL64* m3_p=m3;
 
+    __m128d tmp2 ;
+    __m128d m1_1;
+    __m128d m1_2;
+    __m128d m1_3;
+    __m128d m2_1;
+    __m128d m2_2;
+    __m128d m2_3;
+    __m128d m3_11;
+    
     for(int i =0; i < n_mat; i++) { 
-      /* Next matrix */
       m2_1 = _mm_load_pd(m2_p);
       m2_1 = _mm_mul_pd(scalar, m2_1);
 
@@ -732,15 +674,9 @@ QDPXX_MESSAGE("Using SSE3")
       tmp1 = _mm_add_pd(tmp1, m3_11);
       _mm_store_pd(m3_p+16, tmp1);
 
+      // Next matrix
       m1_p += 18; m2_p += 18; m3_p += 18;
-
     }
-    
-
-
   }
-
-
-
 } // namespace QDP;
 

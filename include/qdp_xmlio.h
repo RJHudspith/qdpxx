@@ -223,7 +223,7 @@ namespace QDP
     input.resize(array_size);
 
     // Get the elements one by one
-    for(int i=0; i < input.size(); i++) 
+    for( size_t i=0; i < input.size(); i++) 
     {
       std::ostringstream element_xpath;
 
@@ -298,7 +298,7 @@ namespace QDP
     input.resize(array_size);
 
     // Get the elements one by one
-    for(int i=0; i < input.size(); i++) 
+    for( size_t i=0; i < input.size(); i++) 
     {
       std::ostringstream element_xpath;
 
@@ -367,7 +367,7 @@ namespace QDP
     input.clear();
 
     // Get the elements one by one
-    for(int i=0; i < input.size(); i++) 
+    for( size_t i=0; i < input.size(); i++) 
     {
       std::ostringstream element_xpath;
 
@@ -442,7 +442,7 @@ namespace QDP
     }
       
     // Get the elements one by one
-    for(int i=0; i < array_size; i++) 
+    for( size_t i=0; i < array_size; i++) 
     {
       std::ostringstream element_xpath;
 
@@ -752,26 +752,10 @@ namespace QDP
     // Write the array name
     xml.openTag(s);
 
-#if 0
-    // This stuff is for schemas
-    XMLWriterAPI::AttributeList alist;
-    alist.push_back(XMLWriterAPI::Attribute("minOccurs", s1.size()));
-    alist.push_back(XMLWriterAPI::Attribute("maxOccurs", s1.size()));
-      
-    xml.openTag("complexType");
-    xml.openTag("sequence", alist);
-#endif
-
-    for(int index=0; index < s1.size(); index++) 
+    for(size_t index=0; index < s1.size(); index++) 
     {
       write(xml, "elem", s1[index]);  // Possibly grab user defines here
     }
-
-#if 0
-    // This stuff is for schemas
-    xml.closeTag(); // sequence
-    xml.closeTag(); // complexType
-#endif
     xml.closeTag(); // Array name
   }
 

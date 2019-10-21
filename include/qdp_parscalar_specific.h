@@ -8,6 +8,10 @@
 #define QDP_PARSCALAR_SPECIFIC_H
 
 #include "qmp.h"
+#include <omp.h>
+
+//! include the header file for dispatch
+#include "qdp_dispatch.h"
 
 namespace QDP {
 
@@ -323,10 +327,6 @@ void evaluate_userfunc(int lo, int hi, int myId, user_arg<T,T1,Op,RHS> *a)
 	 }
 }
 
-//! include the header file for dispatch
-#include "qdp_dispatch.h"
-
-
 
 //-----------------------------------------------------------------------------
 //! OLattice Op Scalar(Expression(source)) under an Subset
@@ -339,20 +339,11 @@ template<class T, class T1, class Op, class RHS>
 void evaluate(OLattice<T>& dest, const Op& op, const QDPExpr<RHS,OScalar<T1> >& rhs,
 				const Subset& s)
 {
-// cerr << "In evaluateSubset(olattice,oscalar)\n";
-
 #if defined(QDP_USE_PROFILING)	 
 	static QDPProfile_t prof(dest, op, rhs);
 	prof.time -= getClockTime();
 #endif
 
-#if 0
-	int numSiteTable = s.numSiteTable();
-	
-	u_arg<T,T1,Op,RHS> a(dest, rhs, op, s.siteTable().slice());
-
-	dispatch_to_threads< u_arg<T,T1,Op,RHS> >(numSiteTable, a, ev_userfunc);
-#else
 	///////////////////
 	// Original code
 	//////////////////
@@ -364,8 +355,7 @@ void evaluate(OLattice<T>& dest, const Op& op, const QDPExpr<RHS,OScalar<T1> >& 
 		 int i = tab[j];
 		 op(dest.elem(i), forEach(rhs, EvalLeaf1(0), OpCombine()));
 	 }
-#endif
-
+	
 #if defined(QDP_USE_PROFILING)	 
 	prof.time += getClockTime();
 	prof.count++;
@@ -384,38 +374,25 @@ template<class T, class T1, class Op, class RHS>
 void evaluate(OLattice<T>& dest, const Op& op, const QDPExpr<RHS,OLattice<T1> >& rhs,
 				const Subset& s)
 {
-//	cerr << "In evaluateSubset(olattice,olattice)" << endl;
-
 #if defined(QDP_USE_PROFILING)	 
 	static QDPProfile_t prof(dest, op, rhs);
 	prof.time -= getClockTime();
 #endif
 
-#if 0
-	int numSiteTable = s.numSiteTable();
-
-	user_arg<T,T1,Op,RHS> a(dest, rhs, op, s.siteTable().slice());
-
-	dispatch_to_threads< user_arg<T,T1,Op,RHS> >(numSiteTable, a, evaluate_userfunc);
-#else
 	const int *tab = s.siteTable().slice();
 	const int numSiteTable = s.numSiteTable();
-#pragma omp parallel for
-	for(int j=0; j < numSiteTable; ++j)
-	{
-		int i = tab[j];
-		op(dest.elem(i), forEach(rhs, EvalLeaf1(i), OpCombine()));
+        #pragma omp parallel for
+	for(int j=0; j < numSiteTable; ++j) {
+	  int i = tab[j];
+	  op(dest.elem(i), forEach(rhs, EvalLeaf1(i), OpCombine()));
 	}
-#endif
+
 #if defined(QDP_USE_PROFILING)	 
 	prof.time += getClockTime();
 	prof.count++;
 	prof.print();
 #endif
 }
-
-
-
 
 template<class T, class T1, class Op, class RHS>
 //inline
@@ -428,16 +405,6 @@ void evaluate_F(T* dest, const Op& op, const QDPExpr<RHS,OLattice<T1> >& rhs,
   static QDPProfile_t prof(dest, op, rhs);
   prof.time -= getClockTime();
 #endif
-
-  // int numSiteTable = s.numSiteTable();
-  // user_arg<T,T1,Op,RHS> a(dest, rhs, op, s.siteTable().slice());
-  // dispatch_to_threads< user_arg<T,T1,Op,RHS> >(numSiteTable, a, evaluate_userfunc);
-
-  ////////////////////
-  // Original code
-  ///////////////////
-
-  //QDP_info("eval_F %d sites",s.numSiteTable());
 
   // General form of loop structure
   const int *tab = s.siteTable().slice();
